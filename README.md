@@ -263,5 +263,3 @@ RuleEngine engine = RuleEngine.builder()
 - **消费者数 ≤ 分区数**，多了会空转
 - **分区键必须是 originator**，换别的键会直接破坏顺序保证
 - **手动提交 offset**，自动提交会在处理失败时丢消息
-#   r u l e - e n g i n e  
- 
