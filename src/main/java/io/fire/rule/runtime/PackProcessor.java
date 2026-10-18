@@ -87,14 +87,9 @@ public class PackProcessor {
 
         do {
             PackContext packCtx = new PackContext(source.name(), submitStrategy);
-            List<Envelope> submitted = new ArrayList<Envelope>();
+            List<Envelope> submitted = new ArrayList<>();
 
-            submitStrategy.submitAttempt(new SubmitStrategy.MessageConsumer() {
-                @Override
-                public void accept(UUID id, Envelope msg) {
-                    submitOne(packCtx, id, msg);
-                }
-            });
+            submitStrategy.submitAttempt((id, msg) -> submitOne(packCtx, id, msg));
 
             boolean timeout = false;
             try {
@@ -131,7 +126,7 @@ public class PackProcessor {
         } while (true);
     }
 
-    private void submitOne(final PackContext packCtx, final UUID id, Envelope envelope) {
+    private void submitOne(final PackContext packCtx, final String id, Envelope envelope) {
         // 每条消息带上批次回调，节点的 ack / failure 才能回传
         final RuleMessage msg = envelope.getMessage()
                 .copy()
@@ -140,42 +135,39 @@ public class PackProcessor {
 
         // 按 originator 分区：同一设备串行，不同设备并行
         dispatcher.execute(msg.getOriginator() == null ? "default" : msg.getOriginator(),
-                new Runnable() {
-                    @Override
-                    public void run() {
-                        try {
-                            // 跨节点恢复的消息带 relations，走 resume 而非 execute
-                            Set<String> rels = envelope.getRelations();
-                            if (rels != null && !rels.isEmpty()
-                                    && msg.getNodeId() != null && msg.getChainId() != null) {
-                                chainExecutor.resume(msg.getChainId(), msg.getNodeId(),
-                                        msg, rels, new ExecutionCallback() {
-                                            @Override
-                                            public void onComplete() {
-                                                packCtx.onSuccess(id);
-                                            }
+                () -> {
+                    try {
+                        // 跨节点恢复的消息带 relations，走 resume 而非 execute
+                        Set<String> rels = envelope.getRelations();
+                        if (rels != null && !rels.isEmpty()
+                                && msg.getNodeId() != null && msg.getChainId() != null) {
+                            chainExecutor.resume(msg.getChainId(), msg.getNodeId(),
+                                    msg, rels, new ExecutionCallback() {
+                                        @Override
+                                        public void onComplete() {
+                                            packCtx.onSuccess(id);
+                                        }
 
-                                            @Override
-                                            public void onError(Throwable t) {
-                                                packCtx.onFailure(id, t);
-                                            }
-                                        });
-                                return;
-                            }
-                            chainExecutor.execute(msg, new ExecutionCallback() {
-                                @Override
-                                public void onComplete() {
-                                    packCtx.onSuccess(id);
-                                }
-
-                                @Override
-                                public void onError(Throwable t) {
-                                    packCtx.onFailure(id, t);
-                                }
-                            });
-                        } catch (Exception e) {
-                            packCtx.onFailure(id, e);
+                                        @Override
+                                        public void onError(Throwable t) {
+                                            packCtx.onFailure(id, t);
+                                        }
+                                    });
+                            return;
                         }
+                        chainExecutor.execute(msg, new ExecutionCallback() {
+                            @Override
+                            public void onComplete() {
+                                packCtx.onSuccess(id);
+                            }
+
+                            @Override
+                            public void onError(Throwable t) {
+                                packCtx.onFailure(id, t);
+                            }
+                        });
+                    } catch (Exception e) {
+                        packCtx.onFailure(id, e);
                     }
                 });
     }

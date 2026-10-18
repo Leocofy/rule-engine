@@ -14,16 +14,16 @@ public interface SubmitStrategy {
     void init(List<Envelope> msgs);
 
     /** 尚未收到结果（处理中或已超时）的消息。 */
-    Map<UUID, Envelope> pendingMap();
+    Map<String, Envelope> pendingMap();
 
     /** 投递一批（具体数量由策略决定）。 */
     void submitAttempt(MessageConsumer consumer);
 
     /** 重试时只把失败/超时的消息放回。 */
-    void update(Map<UUID, Envelope> reprocessMap);
+    void update(Map<String, Envelope> reprocessMap);
 
     /** 单条成功回调，串行策略靠它解锁同 key 的下一条。 */
-    void onSuccess(UUID id);
+    void onSuccess(String id);
 
     /**
      * 单条失败回调。
@@ -32,11 +32,11 @@ public interface SubmitStrategy {
      * 一条失败就会永久卡住该实体的后续消息，只能等批次超时——
      * 这在生产环境会表现为"某个设备的消息全部堆到超时"。
      */
-    void onFailure(UUID id);
+    void onFailure(String id);
 
     void stop();
 
     interface MessageConsumer {
-        void accept(UUID id, Envelope msg);
+        void accept(String id, Envelope msg);
     }
 }

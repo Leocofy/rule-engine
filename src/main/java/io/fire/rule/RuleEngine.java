@@ -13,6 +13,9 @@ import io.fire.rule.runtime.dispatcher.KeyOrderedDispatcher;
 import io.fire.rule.runtime.dispatcher.TaskDispatcher;
 import io.fire.rule.spi.*;
 
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -48,7 +51,7 @@ public class RuleEngine {
     private final PackProcessor processor;
     private final TaskDispatcher dispatcher;
     private final ExecutorService asyncPool;
-    private final ExecutorService consumerThread;
+    private final ExecutorService consumerExecutor;
     private final JsonChainLoader loader;
     private final EngineObserver observer;
 
@@ -60,7 +63,7 @@ public class RuleEngine {
         this.dispatcher = b.dispatcher;
 
         this.chainExecutor = ChainExecutor.builder()
-                .expressionEngine(b.IExpressionEngine)
+                .expressionEngine(b.expressionEngine)
                 .asyncExecutor(asyncPool)
                 .sink(b.sink)
                 .defaultChainId(b.defaultChainId)
@@ -91,7 +94,7 @@ public class RuleEngine {
             chainExecutor.setMessageSink(distSink);
         }
 
-        this.consumerThread = Executors.newSingleThreadExecutor(r -> {
+        this.consumerExecutor = Executors.newSingleThreadExecutor(r -> {
             Thread t = new Thread(r, "rule-consumer");
             t.setDaemon(true);
             return t;
@@ -118,12 +121,12 @@ public class RuleEngine {
      * 启动消费循环（非阻塞）。
      */
     public void start() {
-        consumerThread.submit(processor::run);
+        consumerExecutor.submit(processor::run);
     }
 
     public void stop() {
         processor.stop();
-        consumerThread.shutdown();
+        consumerExecutor.shutdown();
         chainExecutor.shutdown();
         dispatcher.close();
         asyncPool.shutdown();
@@ -145,8 +148,7 @@ public class RuleEngine {
      * 同步处理一条消息，绕过队列，便于测试与单条调试。
      */
     public void submitSync(RuleMessage msg) {
-        processor.processPack(java.util.Collections.singletonList(
-                new io.fire.rule.runtime.Envelope(msg)));
+        processor.processPack(Collections.singletonList(new Envelope(msg)));
     }
 
     public static Builder builder() {
@@ -155,7 +157,7 @@ public class RuleEngine {
 
     public static final class Builder {
         private NodeRegistry registry = new NodeRegistry();
-        private IExpressionEngine IExpressionEngine;
+        private IExpressionEngine expressionEngine;
         private MessageSource source;
         private IMessageSink sink;
         private EngineObserver observer = EngineObserver.NOOP;
@@ -187,8 +189,8 @@ public class RuleEngine {
             return this;
         }
 
-        public Builder expressionEngine(IExpressionEngine IExpressionEngine) {
-            this.IExpressionEngine = IExpressionEngine;
+        public Builder expressionEngine(IExpressionEngine expressionEngine) {
+            this.expressionEngine = expressionEngine;
             return this;
         }
 
@@ -277,7 +279,7 @@ public class RuleEngine {
         }
 
         public RuleEngine build() {
-            if (IExpressionEngine == null) {
+            if (expressionEngine == null) {
                 throw new IllegalStateException("ExpressionEngine 必填");
             }
             if (source == null) {
@@ -291,7 +293,6 @@ public class RuleEngine {
      * 能力容器，用于向节点注入业务服务。
      */
     public static final class Capabilities {
-        private final java.util.Map<Class<?>, Object> map =
-                new java.util.HashMap<Class<?>, Object>();
+        private final Map<Class<?>, Object> map = new HashMap<>();
     }
 }

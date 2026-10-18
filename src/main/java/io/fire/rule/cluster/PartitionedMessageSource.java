@@ -46,7 +46,7 @@ public class PartitionedMessageSource implements MessageSource {
                 TransportMessage t = serializer.deserialize(data);
                 RuleMessage msg = serializer.toRuleMessage(t);
                 Set<String> rels = t.getRelations();
-                out.add(new Envelope(UUID.randomUUID(), msg, null,
+                out.add(new Envelope(UUID.randomUUID().toString(), msg, null,
                         rels.isEmpty() ? null : rels));
             }
             if (out.size() >= maxCount) {

@@ -2,7 +2,7 @@ package io.fire.rule;
 
 import io.fire.rule.model.RuleMessage;
 import io.fire.rule.nodes.*;
-import io.fire.rule.nodes.SimpleIExpressionEngine;
+import io.fire.rule.nodes.SimpleExpressionEngine;
 import io.fire.rule.observability.EngineObserver;
 import io.fire.rule.runtime.InMemoryMessageSource;
 import io.fire.rule.runtime.SequentialByKeySubmitStrategy;
@@ -37,7 +37,7 @@ public class EngineDemo {
         // 4. 构建引擎：按设备串行，保证同一设备的消息有序
         RuleEngine engine = RuleEngine.builder()
                 .registry(registry)
-                .expressionEngine(new SimpleIExpressionEngine())
+                .expressionEngine(new SimpleExpressionEngine())
                 .source(source)
                 .observer(stats)
                 .submitStrategy(new SequentialByKeySubmitStrategy())

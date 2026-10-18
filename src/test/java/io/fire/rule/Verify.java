@@ -34,7 +34,7 @@ public class Verify {
         NodeRegistry reg = new NodeRegistry();
         reg.register(RecorderNode.class);
         RuleEngine e = RuleEngine.builder().registry(reg)
-                .expressionEngine(new SimpleIExpressionEngine())
+                .expressionEngine(new SimpleExpressionEngine())
                 .source(new InMemoryMessageSource("q"))
                 .submitStrategy(new SequentialByKeySubmitStrategy())
                 .packTimeoutMs(5000)
@@ -60,7 +60,7 @@ public class Verify {
         reg.register(RecorderNode.class);
         reg.register(FilterNode.class);
         RuleEngine e = RuleEngine.builder().registry(reg)
-                .expressionEngine(new SimpleIExpressionEngine())
+                .expressionEngine(new SimpleExpressionEngine())
                 .source(new InMemoryMessageSource("q"))
                 .packTimeoutMs(5000)
                 .capability(RecorderNode.Sink.class, new RecorderNode.Sink() {
@@ -86,7 +86,7 @@ public class Verify {
         reg.register(RecorderNode.class);
         reg.register(SubChainNode.class);
         RuleEngine e = RuleEngine.builder().registry(reg)
-                .expressionEngine(new SimpleIExpressionEngine())
+                .expressionEngine(new SimpleExpressionEngine())
                 .source(new InMemoryMessageSource("q"))
                 .defaultChainId("main")
                 .packTimeoutMs(5000)
@@ -114,7 +114,7 @@ public class Verify {
         NodeRegistry reg = new NodeRegistry();
         reg.register(FlakyNode.class);
         RuleEngine e = RuleEngine.builder().registry(reg)
-                .expressionEngine(new SimpleIExpressionEngine())
+                .expressionEngine(new SimpleExpressionEngine())
                 .source(new InMemoryMessageSource("q"))
                 .retryStrategy(RetryStrategy.retryFailed().maxRetries(3))
                 .packTimeoutMs(5000)
@@ -133,7 +133,7 @@ public class Verify {
         NodeRegistry reg = new NodeRegistry();
         reg.register(HangNode.class);
         RuleEngine e = RuleEngine.builder().registry(reg)
-                .expressionEngine(new SimpleIExpressionEngine())
+                .expressionEngine(new SimpleExpressionEngine())
                 .source(new InMemoryMessageSource("q"))
                 .retryStrategy(RetryStrategy.skipAll())
                 .packTimeoutMs(800)
@@ -153,7 +153,7 @@ public class Verify {
         NodeRegistry reg = new NodeRegistry();
         reg.register(RecorderNode.class);
         RuleEngine e = RuleEngine.builder().registry(reg)
-                .expressionEngine(new SimpleIExpressionEngine())
+                .expressionEngine(new SimpleExpressionEngine())
                 .source(new InMemoryMessageSource("q"))
                 .packTimeoutMs(5000)
                 .capability(RecorderNode.Sink.class, new RecorderNode.Sink() {

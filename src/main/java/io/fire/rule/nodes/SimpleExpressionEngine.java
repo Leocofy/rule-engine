@@ -23,7 +23,7 @@ import java.util.Set;
  *   <li>route: 取 metadata 中指定键的值作为关系名，逗号分隔可多播</li>
  * </ul>
  */
-public class SimpleIExpressionEngine implements IExpressionEngine {
+public class SimpleExpressionEngine implements IExpressionEngine {
 
     @Override
     public boolean evaluate(String expr, RuleMessage msg) {

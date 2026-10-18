@@ -26,10 +26,10 @@ public class HashPartitionRouter implements PartitionRouter {
     public HashPartitionRouter(String nodeId, int partitionCount, Set<Integer> ownedPartitions) {
         this.nodeId = nodeId;
         this.partitionCount = partitionCount;
-        this.owned = new AtomicReference<Set<Integer>>(
+        this.owned = new AtomicReference<>(
                 ownedPartitions == null
-                        ? Collections.<Integer>emptySet()
-                        : new LinkedHashSet<Integer>(ownedPartitions));
+                        ? Collections.emptySet()
+                        : new LinkedHashSet<>(ownedPartitions));
     }
 
     /** 静态均分：用于测试或固定部署（如 3 实例 × 12 分区）。 */

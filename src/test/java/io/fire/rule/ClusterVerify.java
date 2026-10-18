@@ -71,7 +71,7 @@ public class ClusterVerify {
         // 实例 B：拥有分区 1
         HashPartitionRouter routerB = HashPartitionRouter.staticAssign("node-B", 4, 1, 4);
         RuleEngine engineB = RuleEngine.builder()
-                .registry(reg).expressionEngine(new SimpleIExpressionEngine())
+                .registry(reg).expressionEngine(new SimpleExpressionEngine())
                 .source(new PartitionedMessageSource("q", routerB, ser, broker, 64))
                 .partitionRouter(routerB).messageSerializer(ser)
                 .remoteTransport(broker)
@@ -128,7 +128,7 @@ public class ClusterVerify {
         reg.register(TraceNode.class);
         reg.register(CrossNode.class);
         RuleEngine e = RuleEngine.builder()
-                .registry(reg).expressionEngine(new SimpleIExpressionEngine())
+                .registry(reg).expressionEngine(new SimpleExpressionEngine())
                 .source(new PartitionedMessageSource("q", router, ser, broker, 64))
                 .partitionRouter(router).messageSerializer(ser)
                 .remoteTransport(broker)

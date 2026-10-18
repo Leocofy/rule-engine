@@ -1,13 +1,6 @@
 package io.fire.rule.runtime;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.Queue;
-import java.util.UUID;
+import java.util.*;
 
 /**
  * 按 originator 串行：同一实体的下一条消息必须等上一条 ack。
@@ -15,16 +8,16 @@ import java.util.UUID;
  * <p>这是默认推荐策略——设备状态更新、告警判定都依赖顺序。
  * 代价是热点实体会拖慢同批次，属于"用并行度换正确性"的取舍。
  *
- * <p>实现要点：{@link #onSuccess(UUID)} 是解锁信号。
+ * <p>实现要点：{@link #onSuccess(String)} 是解锁信号。
  * 收到某条消息完成后，立即放行该实体的下一条，
  * 无需等整批结束，因此吞吐损失远小于"全局串行"。
  */
 public class SequentialByKeySubmitStrategy implements SubmitStrategy {
 
-    private final Map<UUID, Envelope> pending = new LinkedHashMap<UUID, Envelope>();
-    private final Map<String, Queue<Envelope>> queuesByKey = new HashMap<String, Queue<Envelope>>();
-    private final Map<String, Envelope> inFlight = new HashMap<String, Envelope>();
-    private final List<String> keys = new ArrayList<String>();
+    private final Map<String, Envelope> pending = new LinkedHashMap<>();
+    private final Map<String, Queue<Envelope>> queuesByKey = new HashMap<>();
+    private final Map<String, Envelope> inFlight = new HashMap<>();
+    private final List<String> keys = new ArrayList<>();
     private MessageConsumer consumer;
 
     @Override
@@ -36,7 +29,7 @@ public class SequentialByKeySubmitStrategy implements SubmitStrategy {
     }
 
     @Override
-    public Map<UUID, Envelope> pendingMap() {
+    public Map<String, Envelope> pendingMap() {
         return pending;
     }
 
@@ -49,17 +42,17 @@ public class SequentialByKeySubmitStrategy implements SubmitStrategy {
     }
 
     @Override
-    public synchronized void onSuccess(UUID id) {
+    public synchronized void onSuccess(String id) {
         release(id);
     }
 
     @Override
-    public synchronized void onFailure(UUID id) {
+    public synchronized void onFailure(String id) {
         // 失败同样要放行，否则该实体的后续消息会一直卡到批次超时
         release(id);
     }
 
-    private void release(UUID id) {
+    private void release(String id) {
         String key = null;
         for (Map.Entry<String, Envelope> entry : inFlight.entrySet()) {
             if (entry.getValue().getId().equals(id)) {
@@ -87,7 +80,7 @@ public class SequentialByKeySubmitStrategy implements SubmitStrategy {
     }
 
     @Override
-    public void update(Map<UUID, Envelope> reprocessMap) {
+    public void update(Map<String, Envelope> reprocessMap) {
         reset();
         for (Envelope e : reprocessMap.values()) {
             enqueue(e);
@@ -103,13 +96,10 @@ public class SequentialByKeySubmitStrategy implements SubmitStrategy {
     private void enqueue(Envelope e) {
         pending.put(e.getId(), e);
         String key = e.getMessage().getOriginator();
-        Queue<Envelope> q = queuesByKey.get(key);
-        if (q == null) {
-            q = new LinkedList<Envelope>();
-            queuesByKey.put(key, q);
+        queuesByKey.computeIfAbsent(key, k -> {
             keys.add(key);
-        }
-        q.add(e);
+            return new LinkedList<>();
+        }).add(e);
     }
 
     private void reset() {

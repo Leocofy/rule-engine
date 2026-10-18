@@ -49,22 +49,19 @@ public class AiDecisionNode implements RuleNode {
             ctx.tellFailure(msg, new IllegalStateException("未注入 DecisionService"));
             return;
         }
-        ctx.asyncExecutor().execute(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    if (!msg.isValid()) {
-                        return; // 批次已超时/取消
-                    }
-                    String relation = service.decide(agent, msg);
-                    if (relation == null || relation.isEmpty()) {
-                        ctx.tellNext(msg, fallbackRelations);
-                        return;
-                    }
-                    ctx.tellNext(msg, relation);
-                } catch (Exception e) {
-                    ctx.tellFailure(msg, e);
+        ctx.asyncExecutor().execute(() -> {
+            try {
+                if (!msg.isValid()) {
+                    return; // 批次已超时/取消
                 }
+                String relation = service.decide(agent, msg);
+                if (relation == null || relation.isEmpty()) {
+                    ctx.tellNext(msg, fallbackRelations);
+                    return;
+                }
+                ctx.tellNext(msg, relation);
+            } catch (Exception e) {
+                ctx.tellFailure(msg, e);
             }
         });
     }

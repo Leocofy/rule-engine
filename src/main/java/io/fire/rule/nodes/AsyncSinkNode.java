@@ -37,15 +37,12 @@ public class AsyncSinkNode implements RuleNode {
             ctx.tellFailure(msg, new IllegalStateException("未注入 SinkHandler"));
             return;
         }
-        ctx.asyncExecutor().execute(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    handler.handle(msg);
-                    ctx.ack(msg);
-                } catch (Exception e) {
-                    ctx.tellFailure(msg, e);
-                }
+        ctx.asyncExecutor().execute(() -> {
+            try {
+                handler.handle(msg);
+                ctx.ack(msg);
+            } catch (Exception e) {
+                ctx.tellFailure(msg, e);
             }
         });
     }

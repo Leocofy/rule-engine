@@ -17,7 +17,7 @@ import java.util.UUID;
  */
 public final class Envelope {
 
-    private final UUID id;
+    private final String id;
     private final RuleMessage message;
     private final Object ackHandle;
     /**
@@ -29,14 +29,14 @@ public final class Envelope {
     private final Set<String> relations;
 
     public Envelope(RuleMessage message) {
-        this(UUID.randomUUID(), message, null, null);
+        this(UUID.randomUUID().toString(), message, null, null);
     }
 
-    public Envelope(UUID id, RuleMessage message, Object ackHandle) {
+    public Envelope(String id, RuleMessage message, Object ackHandle) {
         this(id, message, ackHandle, null);
     }
 
-    public Envelope(UUID id, RuleMessage message, Object ackHandle, Set<String> relations) {
+    public Envelope(String id, RuleMessage message, Object ackHandle, Set<String> relations) {
         this.id = id;
         this.message = message;
         this.ackHandle = ackHandle;
@@ -47,7 +47,7 @@ public final class Envelope {
         return relations;
     }
 
-    public UUID getId() {
+    public String getId() {
         return id;
     }
 

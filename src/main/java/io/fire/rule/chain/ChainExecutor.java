@@ -232,7 +232,7 @@ public class ChainExecutor {
                 return this;
             }
             if (capabilities == null) {
-                capabilities = new HashMap<Class<?>, Object>();
+                capabilities = new HashMap<>();
             }
             capabilities.putAll(map);
             return this;

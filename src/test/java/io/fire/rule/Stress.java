@@ -23,7 +23,7 @@ public class Stress {
         int lanes = 16;
         RuleEngine e = RuleEngine.builder()
                 .registry(reg)
-                .expressionEngine(new SimpleIExpressionEngine())
+                .expressionEngine(new SimpleExpressionEngine())
                 .source(new InMemoryMessageSource("q"))
                 .dispatcher(new KeyOrderedDispatcher(lanes, 4096))
                 .submitStrategy(new BurstSubmitStrategy())

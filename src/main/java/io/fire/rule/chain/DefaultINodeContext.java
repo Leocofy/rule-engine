@@ -28,7 +28,7 @@ import java.util.concurrent.Executor;
 public class DefaultINodeContext implements INodeContext {
 
     private static final Set<String> SUCCESS_ONLY =
-            Collections.unmodifiableSet(new LinkedHashSet<String>(Arrays.asList(NodeRegistry.Relations.SUCCESS)));
+            Collections.unmodifiableSet(new LinkedHashSet<>(Collections.singleton(NodeRegistry.Relations.SUCCESS)));
 
     private final ChainExecutor executor;
     private final RuleChain chain;
@@ -49,7 +49,7 @@ public class DefaultINodeContext implements INodeContext {
         this.IExpressionEngine = IExpressionEngine;
         this.asyncExecutor = asyncExecutor;
         this.sink = sink;
-        this.capabilities = capabilities != null ? capabilities : new HashMap<Class<?>, Object>();
+        this.capabilities = capabilities != null ? capabilities : new HashMap<>();
         this.callback = callback;
     }
 

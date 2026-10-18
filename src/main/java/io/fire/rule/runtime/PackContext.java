@@ -5,7 +5,6 @@ import io.fire.rule.model.PackCallback;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -34,16 +33,19 @@ public class PackContext {
     private final AtomicInteger pendingCount;
     private final CountDownLatch latch = new CountDownLatch(1);
 
-    private final Map<UUID, Envelope> pending;
-    private final Map<UUID, Envelope> success = new ConcurrentHashMap<UUID, Envelope>();
-    private final Map<UUID, Envelope> failed = new ConcurrentHashMap<UUID, Envelope>();
-    private final Map<UUID, String> failures = new ConcurrentHashMap<UUID, String>();
+    private final Map<String, Envelope> pending;
+    private final Map<String, Envelope> success = new ConcurrentHashMap<>();
+    private final Map<String, Envelope> failed = new ConcurrentHashMap<>();
+    private final Map<String, String> failures = new ConcurrentHashMap<>();
 
-    /** 每条消息派生出的分支剩余数（fan-out 场景）。 */
-    private final Map<UUID, java.util.concurrent.atomic.AtomicInteger> fanOutRemaining =
-            new ConcurrentHashMap<UUID, java.util.concurrent.atomic.AtomicInteger>();
-    /** 某分支已失败，但需等其余分支完成才能收口。 */
-    private final Map<UUID, Throwable> pendingFailure = new ConcurrentHashMap<UUID, Throwable>();
+    /**
+     * 每条消息派生出的分支剩余数（fan-out 场景）。
+     */
+    private final Map<String, AtomicInteger> fanOutRemaining = new ConcurrentHashMap<>();
+    /**
+     * 某分支已失败，但需等其余分支完成才能收口。
+     */
+    private final Map<String, Throwable> pendingFailure = new ConcurrentHashMap<>();
 
     private volatile boolean canceled;
     private volatile boolean committed;
@@ -55,7 +57,9 @@ public class PackContext {
         this.pendingCount = new AtomicInteger(pending.size());
     }
 
-    /** 等待整批处理完成，返回 false 表示超时。 */
+    /**
+     * 等待整批处理完成，返回 false 表示超时。
+     */
     public boolean await(long timeoutMs) throws InterruptedException {
         boolean ok = latch.await(timeoutMs, TimeUnit.MILLISECONDS);
         if (ok) {
@@ -64,17 +68,21 @@ public class PackContext {
         return ok;
     }
 
-    /** 声明派生分支数：增加待完成计数，避免先完成的分支提前收口。 */
-    public void onFanOut(UUID id, int branches) {
+    /**
+     * 声明派生分支数：增加待完成计数，避免先完成的分支提前收口。
+     */
+    public void onFanOut(String id, int branches) {
         if (branches <= 1) {
             return;
         }
-        fanOutRemaining.put(id, new java.util.concurrent.atomic.AtomicInteger(branches));
+        fanOutRemaining.put(id, new AtomicInteger(branches));
         pendingCount.addAndGet(branches - 1);
     }
 
-    /** 该分支已完成；返回 true 表示所有分支都完成，可以收口。 */
-    private boolean branchDone(UUID id) {
+    /**
+     * 该分支已完成；返回 true 表示所有分支都完成，可以收口。
+     */
+    private boolean branchDone(String id) {
         java.util.concurrent.atomic.AtomicInteger r = fanOutRemaining.get(id);
         if (r == null) {
             return true;
@@ -86,7 +94,7 @@ public class PackContext {
         return true;
     }
 
-    public void onSuccess(UUID id) {
+    public void onSuccess(String id) {
         if (!branchDone(id)) {
             return;   // 还有其他分支在跑
         }
@@ -106,11 +114,11 @@ public class PackContext {
         }
     }
 
-    private void finishAsFailed(UUID id, Throwable t) {
+    private void finishAsFailed(String id, Throwable t) {
         finishAsFailed(id, t, true);
     }
 
-    private void finishAsFailed(UUID id, Throwable t, boolean release) {
+    private void finishAsFailed(String id, Throwable t, boolean release) {
         Envelope removed = pending.remove(id);
         if (removed == null) {
             return;
@@ -125,7 +133,7 @@ public class PackContext {
         }
     }
 
-    public void onFailure(UUID id, Throwable t) {
+    public void onFailure(String id, Throwable t) {
         if (!branchDone(id)) {
             // 记录失败，等其余分支完成后再统一判失败
             pendingFailure.put(id, t);
@@ -134,7 +142,9 @@ public class PackContext {
         finishAsFailed(id, t);
     }
 
-    /** 超时后剩余在 pending 中的即为超时消息。 */
+    /**
+     * 超时后剩余在 pending 中的即为超时消息。
+     */
     public int pendingCount() {
         return pending.size();
     }
@@ -169,24 +179,28 @@ public class PackContext {
         return queueName;
     }
 
-    public Map<UUID, Envelope> getSuccessMap() {
+    public Map<String, Envelope> getSuccessMap() {
         return success;
     }
 
-    public Map<UUID, Envelope> getFailedMap() {
+    public Map<String, Envelope> getFailedMap() {
         return failed;
     }
 
-    /** pending 的不可变快照：超时消息就是到期后仍留在 pending 中的那些。 */
-    public Map<UUID, Envelope> pendingMapSnapshot() {
-        return new ConcurrentHashMap<UUID, Envelope>(pending);
+    /**
+     * pending 的不可变快照：超时消息就是到期后仍留在 pending 中的那些。
+     */
+    public Map<String, Envelope> pendingMapSnapshot() {
+        return new ConcurrentHashMap<>(pending);
     }
 
-    /** 失败原因摘要，用于日志与统计。 */
+    /**
+     * 失败原因摘要，用于日志与统计。
+     */
     public List<String> failureSummary(int limit) {
-        List<String> out = new ArrayList<String>();
+        List<String> out = new ArrayList<>();
         int n = 0;
-        for (Map.Entry<UUID, String> e : failures.entrySet()) {
+        for (Map.Entry<String, String> e : failures.entrySet()) {
             if (n++ >= limit) {
                 break;
             }
@@ -195,8 +209,10 @@ public class PackContext {
         return out;
     }
 
-    /** 消息级的回调桥梁，注入到 RuleMessage 中供节点回调。 */
-    public PackCallback callbackFor(final UUID id) {
+    /**
+     * 消息级的回调桥梁，注入到 RuleMessage 中供节点回调。
+     */
+    public PackCallback callbackFor(final String id) {
         return new PackCallback() {
             @Override
             public void onSuccess() {

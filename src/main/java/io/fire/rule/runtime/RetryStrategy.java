@@ -105,7 +105,7 @@ public final class RetryStrategy {
         }
 
         // ③ 按标志收集待重投消息
-        Map<UUID, Envelope> toReprocess = new LinkedHashMap<UUID, Envelope>();
+        Map<String, Envelope> toReprocess = new LinkedHashMap<>();
         if (retryFailed) {
             toReprocess.putAll(ctx.getFailedMap());
         }
