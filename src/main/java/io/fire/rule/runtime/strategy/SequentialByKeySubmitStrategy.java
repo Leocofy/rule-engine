@@ -1,4 +1,6 @@
-package io.fire.rule.runtime;
+package io.fire.rule.runtime.strategy;
+
+import io.fire.rule.runtime.Envelope;
 
 import java.util.*;
 
@@ -95,9 +97,8 @@ public class SequentialByKeySubmitStrategy implements SubmitStrategy {
 
     private void enqueue(Envelope e) {
         pending.put(e.getId(), e);
-        String key = e.getMessage().getOriginator();
-        queuesByKey.computeIfAbsent(key, k -> {
-            keys.add(key);
+        queuesByKey.computeIfAbsent(e.getMessage().getOriginator(), k -> {
+            keys.add(k);
             return new LinkedList<>();
         }).add(e);
     }

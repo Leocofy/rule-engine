@@ -5,7 +5,7 @@ import io.fire.rule.nodes.*;
 import io.fire.rule.nodes.SimpleExpressionEngine;
 import io.fire.rule.observability.EngineObserver;
 import io.fire.rule.runtime.InMemoryMessageSource;
-import io.fire.rule.runtime.SequentialByKeySubmitStrategy;
+import io.fire.rule.runtime.strategy.SequentialByKeySubmitStrategy;
 import io.fire.rule.spi.NodeRegistry;
 
 import java.io.BufferedReader;

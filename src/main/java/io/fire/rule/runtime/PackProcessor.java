@@ -6,12 +6,15 @@ import io.fire.rule.model.RuleMessage;
 import io.fire.rule.observability.EngineObserver;
 import io.fire.rule.runtime.dispatcher.KeyOrderedDispatcher;
 import io.fire.rule.runtime.dispatcher.TaskDispatcher;
+import io.fire.rule.runtime.strategy.BurstSubmitStrategy;
+import io.fire.rule.runtime.strategy.SubmitStrategy;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
-import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 规则引擎主循环——整个框架的调度心脏。
@@ -44,6 +47,11 @@ public class PackProcessor {
     private volatile boolean running;
     private volatile boolean started;
 
+    /**
+     * 优雅关闭：批次结束后倒计时归零。
+     */
+    private final CountDownLatch stopped = new CountDownLatch(1);
+
     public PackProcessor(Builder b) {
         this.source = b.source;
         this.chainExecutor = b.chainExecutor;
@@ -57,22 +65,55 @@ public class PackProcessor {
         this.packTimeoutMs = b.packTimeoutMs;
     }
 
-    /** 启动消费循环（阻塞，通常在独立线程中运行）。 */
+    /**
+     * 启动消费循环（阻塞，通常在独立线程中运行）。
+     */
     public void run() {
         running = true;
         started = true;
-        while (running) {
-            List<Envelope> msgs = source.poll(pollSize);
-            if (msgs == null || msgs.isEmpty()) {
-                sleepQuietly(pollIntervalMs);
-                continue;
+        try {
+            while (running) {
+                try {
+                    List<Envelope> msgs = source.poll(pollSize);
+                    if (msgs == null || msgs.isEmpty()) {
+                        sleepQuietly(pollIntervalMs);
+                        continue;
+                    }
+                    processPack(msgs);
+                } catch (Throwable t) {
+                    sleepQuietly(pollIntervalMs);
+                }
             }
-            processPack(msgs);
+        } finally {
+            running = false;
+            stopped.countDown();
         }
     }
 
     public void stop() {
         running = false;
+    }
+
+    /**
+     * 请求停止并等待当前批次处理完成。
+     *
+     * @return true 表示在超时前已停止
+     */
+    public boolean stopAndAwait(long timeoutMs) {
+        running = false;
+        try {
+            return stopped.await(timeoutMs, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return stopped.getCount() == 0;
+        }
+    }
+
+    /**
+     * 消费线程是否已完全退出。
+     */
+    public boolean isStopped() {
+        return stopped.getCount() == 0;
     }
 
     /**
@@ -110,19 +151,23 @@ public class PackProcessor {
             ProcessingDecision decision = retryStrategy.analyze(packCtx);
             observer.onPackFinished(source.name(), msgs.size(), decision.isCommit());
 
-            packCtx.cleanup();
+            try {
+                if (decision.isCommit()) {
+                    submitStrategy.stop();
+                    source.commit();
+                    return;
+                }
 
-            if (decision.isCommit()) {
-                submitStrategy.stop();
-                source.commit();
-                return;
+                // 引擎已停止则放弃重试；否则重试次数完全由 RetryStrategy 控制
+                if (started && !running) {
+                    submitStrategy.stop();
+                    return;
+                }
+
+                submitStrategy.update(decision.getReprocessMap());
+            } finally {
+                packCtx.cleanup();
             }
-            // 引擎已停止则放弃重试；否则重试次数完全由 RetryStrategy 控制
-            if (started && !running) {
-                submitStrategy.stop();
-                return;
-            }
-            submitStrategy.update(decision.getReprocessMap());
         } while (true);
     }
 
@@ -241,7 +286,9 @@ public class PackProcessor {
             return this;
         }
 
-        /** 批次处理超时，默认 2 秒；高优先级队列可设更小。 */
+        /**
+         * 批次处理超时，默认 2 秒；高优先级队列可设更小。
+         */
         public Builder packTimeoutMs(long packTimeoutMs) {
             this.packTimeoutMs = packTimeoutMs;
             return this;

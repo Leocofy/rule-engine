@@ -1,4 +1,6 @@
-package io.fire.rule.runtime;
+package io.fire.rule.runtime.strategy;
+
+import io.fire.rule.runtime.Envelope;
 
 import java.util.*;
 

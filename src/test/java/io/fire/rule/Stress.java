@@ -4,6 +4,7 @@ import io.fire.rule.model.*;
 import io.fire.rule.nodes.*;
 import io.fire.rule.runtime.*;
 import io.fire.rule.runtime.dispatcher.KeyOrderedDispatcher;
+import io.fire.rule.runtime.strategy.BurstSubmitStrategy;
 import io.fire.rule.spi.*;
 import java.util.*;
 import java.util.concurrent.*;

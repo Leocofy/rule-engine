@@ -1,8 +1,9 @@
-package io.fire.rule.runtime;
+package io.fire.rule.runtime.strategy;
+
+import io.fire.rule.runtime.Envelope;
 
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 /**
  * 提交策略：决定一批消息"以什么节奏"投给规则链。

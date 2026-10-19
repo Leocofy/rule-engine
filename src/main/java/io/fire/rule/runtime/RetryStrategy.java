@@ -92,19 +92,19 @@ public final class RetryStrategy {
         }
         retryCount++;
 
-        // ① 超过最大重试次数（0 表示不限）
+        // 超过最大重试次数 → 放弃，直接 commit（消息丢失）
         if (maxRetries > 0 && retryCount > maxRetries) {
             return ProcessingDecision.commit();
         }
 
-        // ② 失败率超阈值，放弃重投
+        // 失败率超过阈值 → 放弃
         int failedCount = ctx.getFailedMap().size() + ctx.pendingCount();
         if (maxFailurePercentage > 0 && initialTotalCount > 0
                 && ((double) failedCount / initialTotalCount) > maxFailurePercentage) {
             return ProcessingDecision.commit();
         }
 
-        // ③ 按标志收集待重投消息
+        // 按标志收集待重投消息
         Map<String, Envelope> toReprocess = new LinkedHashMap<>();
         if (retryFailed) {
             toReprocess.putAll(ctx.getFailedMap());

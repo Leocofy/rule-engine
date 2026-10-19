@@ -3,6 +3,7 @@ package io.fire.rule;
 import io.fire.rule.model.*;
 import io.fire.rule.nodes.*;
 import io.fire.rule.runtime.*;
+import io.fire.rule.runtime.strategy.SequentialByKeySubmitStrategy;
 import io.fire.rule.spi.*;
 import java.util.*;
 
