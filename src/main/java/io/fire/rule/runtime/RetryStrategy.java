@@ -94,14 +94,14 @@ public final class RetryStrategy {
 
         // 超过最大重试次数 → 放弃，直接 commit（消息丢失）
         if (maxRetries > 0 && retryCount > maxRetries) {
-            return ProcessingDecision.commit();
+            return ProcessingDecision.drop(ProcessingDecision.RETRY_EXHAUSTED);
         }
 
         // 失败率超过阈值 → 放弃
         int failedCount = ctx.getFailedMap().size() + ctx.pendingCount();
         if (maxFailurePercentage > 0 && initialTotalCount > 0
                 && ((double) failedCount / initialTotalCount) > maxFailurePercentage) {
-            return ProcessingDecision.commit();
+            return ProcessingDecision.drop(ProcessingDecision.FAILURE_RATE_EXCEEDED);
         }
 
         // 按标志收集待重投消息
@@ -116,7 +116,11 @@ public final class RetryStrategy {
             toReprocess.putAll(ctx.getSuccessMap());
         }
         if (toReprocess.isEmpty()) {
-            return ProcessingDecision.commit();
+            // 既失败/超时，又没配置重投 → 这些消息会被丢弃，必须送死信。
+            // 典型场景：retryFailed() 不重投超时项，超时消息即走到这里。
+            return (ctx.getFailedMap().isEmpty() && ctx.pendingCount() == 0)
+                    ? ProcessingDecision.commit()
+                    : ProcessingDecision.drop(ProcessingDecision.TIMEOUT);
         }
 
         sleepBeforeRetry();

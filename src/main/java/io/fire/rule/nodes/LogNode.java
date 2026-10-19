@@ -1,11 +1,9 @@
 package io.fire.rule.nodes;
 
 import io.fire.rule.model.RuleMessage;
-import io.fire.rule.spi.NodeConfig;
-import io.fire.rule.spi.INodeContext;
-import io.fire.rule.spi.NodeDefinition;
-import io.fire.rule.spi.NodeException;
-import io.fire.rule.spi.RuleNode;
+import io.fire.rule.spi.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * 最简同步节点：打印消息并直接放行。
@@ -17,6 +15,8 @@ import io.fire.rule.spi.RuleNode;
         description = "打印消息内容并放行")
 public class LogNode implements RuleNode {
 
+    private static final Logger LOG = LoggerFactory.getLogger(LogNode.class);
+
     private String prefix;
 
     @Override
@@ -26,10 +26,8 @@ public class LogNode implements RuleNode {
 
     @Override
     public void onMsg(INodeContext ctx, RuleMessage msg) throws Exception {
-        System.out.println(prefix + " " + msg.getType()
-                + " originator=" + msg.getOriginator()
-                + " payload=" + msg.getPayload()
-                + " meta=" + msg.getMetaData().values());
+        LOG.info("{} {} \noriginator={} \npayload={} \nmeta={}", prefix, msg.getType(),
+                msg.getOriginator(), msg.getPayload(), msg.getMetaData().values());
         ctx.tellSuccess(msg);
     }
 }

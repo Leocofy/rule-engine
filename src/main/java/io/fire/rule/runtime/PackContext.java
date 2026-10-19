@@ -37,7 +37,7 @@ public class PackContext {
     private final Map<String, Envelope> pending;
     private final Map<String, Envelope> success = new ConcurrentHashMap<>();
     private final Map<String, Envelope> failed = new ConcurrentHashMap<>();
-    private final Map<String, String> failures = new ConcurrentHashMap<>();
+    private final Map<String, Throwable> failures = new ConcurrentHashMap<>();
 
     /**
      * 每条消息派生出的分支剩余数（fan-out 场景）。
@@ -125,7 +125,7 @@ public class PackContext {
             return;
         }
         failed.put(id, removed);
-        failures.put(id, t == null ? "unknown" : String.valueOf(t.getMessage()));
+        failures.put(id, t == null ? new UnknownException() : t);
         if (release) {
             submitStrategy.onFailure(id);
         }
@@ -141,6 +141,17 @@ public class PackContext {
             return;
         }
         finishAsFailed(id, t);
+    }
+
+    /**
+     * 取某条消息的失败异常；超时消息返回 null（超时本身不是异常）。
+     */
+    public Throwable errorOf(String id) {
+        Throwable t = failures.get(id);
+        if (t instanceof UnknownException) {
+            return null;
+        }
+        return t;
     }
 
     /**
@@ -201,11 +212,11 @@ public class PackContext {
     public List<String> failureSummary(int limit) {
         List<String> out = new ArrayList<>();
         int n = 0;
-        for (Map.Entry<String, String> e : failures.entrySet()) {
+        for (Map.Entry<String, Throwable> e : failures.entrySet()) {
             if (n++ >= limit) {
                 break;
             }
-            out.add(e.getKey() + " : " + e.getValue());
+            out.add(e.getKey() + " : " + e.getValue().getMessage());
         }
         return out;
     }
@@ -235,5 +246,11 @@ public class PackContext {
                 return !canceled;
             }
         };
+    }
+
+    public static class UnknownException extends RuntimeException {
+        public UnknownException() {
+            super("unknown");
+        }
     }
 }

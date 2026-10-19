@@ -1,5 +1,7 @@
 package io.fire.rule.observability;
 
+import io.fire.rule.model.RuleMessage;
+
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -34,6 +36,10 @@ public interface EngineObserver {
         @Override
         public void onPackFinished(String queueName, int total, boolean committed) {
         }
+
+        @Override
+        public void onDeadLetter(String queueName, int reason, RuleMessage msg, Throwable error) {
+        }
     };
 
     void onNodeFinished(String chainId, String nodeId, long nanos);
@@ -47,6 +53,14 @@ public interface EngineObserver {
     void onPackFinished(String queueName, int total, boolean committed);
 
     /**
+     * 消息被送进死信队列。
+     *
+     * <p><b>告警级事件</b>：意味着这条消息没走完正常处理链路。
+     * 生产环境应接入监控——持续出现说明有节点或下游故障。
+     */
+    void onDeadLetter(String queueName, int reason, RuleMessage msg, Throwable error);
+
+    /**
      * 开箱可用的统计实现：记录每个节点的执行次数、耗时、错误数。
      * 排查"哪个节点拖慢了整条链"时非常有用。
      */
@@ -55,6 +69,7 @@ public interface EngineObserver {
         private final ConcurrentHashMap<String, AtomicLong> counts = new ConcurrentHashMap<String, AtomicLong>();
         private final ConcurrentHashMap<String, AtomicLong> errors = new ConcurrentHashMap<String, AtomicLong>();
         private final ConcurrentHashMap<String, AtomicLong> totalNanos = new ConcurrentHashMap<String, AtomicLong>();
+        private final AtomicLong deadLetters = new AtomicLong();
 
         @Override
         public void onNodeFinished(String chainId, String nodeId, long nanos) {
@@ -80,6 +95,11 @@ public interface EngineObserver {
         public void onPackFinished(String queueName, int total, boolean committed) {
         }
 
+        @Override
+        public void onDeadLetter(String queueName, int reason, RuleMessage msg, Throwable error) {
+            deadLetters.incrementAndGet();
+        }
+
         /** 输出节点耗时排行，找出瓶颈节点。 */
         public String report() {
             StringBuilder sb = new StringBuilder("节点执行统计(平均耗时降序):\n");
@@ -90,6 +110,7 @@ public interface EngineObserver {
                             .append("  count=").append(e.getValue().get())
                             .append("  avg=").append(String.format("%.3f", avgMs(e.getKey()))).append("ms")
                             .append("  errors=").append(errors.getOrDefault(e.getKey(), new AtomicLong()).get())
+                            .append("  deadLetters=").append(deadLetters.get())
                             .append('\n'));
             return sb.toString();
         }

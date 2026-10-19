@@ -2,15 +2,18 @@ package io.fire.rule.runtime;
 
 import io.fire.rule.chain.ChainExecutor;
 import io.fire.rule.chain.ExecutionCallback;
+import io.fire.rule.cluster.LoggingDeadLetterSink;
 import io.fire.rule.model.RuleMessage;
 import io.fire.rule.observability.EngineObserver;
 import io.fire.rule.runtime.dispatcher.KeyOrderedDispatcher;
 import io.fire.rule.runtime.dispatcher.TaskDispatcher;
 import io.fire.rule.runtime.strategy.BurstSubmitStrategy;
 import io.fire.rule.runtime.strategy.SubmitStrategy;
+import io.fire.rule.spi.IDeadLetterSink;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
@@ -39,6 +42,7 @@ public class PackProcessor {
     private final TaskDispatcher dispatcher;
     private final Executor asyncExecutor;
     private final EngineObserver observer;
+    private final IDeadLetterSink deadLetterSink;
 
     private final int pollSize;
     private final long pollIntervalMs;
@@ -63,6 +67,7 @@ public class PackProcessor {
         this.pollSize = b.pollSize;
         this.pollIntervalMs = b.pollIntervalMs;
         this.packTimeoutMs = b.packTimeoutMs;
+        this.deadLetterSink = b.deadLetterSink != null ? b.deadLetterSink : new LoggingDeadLetterSink();
     }
 
     /**
@@ -138,6 +143,7 @@ public class PackProcessor {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 packCtx.cancel();
+                drainToDeadLetter(packCtx, ProcessingDecision.INTERRUPTED);
                 return;
             }
             if (timeout) {
@@ -151,23 +157,29 @@ public class PackProcessor {
             ProcessingDecision decision = retryStrategy.analyze(packCtx);
             observer.onPackFinished(source.name(), msgs.size(), decision.isCommit());
 
-            try {
-                if (decision.isCommit()) {
-                    submitStrategy.stop();
-                    source.commit();
-                    return;
+            // 正常决策放弃 —— 送死信 → cleanup → commit
+            if (decision.isCommit()) {
+                // 放弃提交前把未成功的消息送死信：
+                // commit 会推进 offset，之后消息再也找不回来。
+                if (decision.dropReason() > 0) {
+                    drainToDeadLetter(packCtx, decision.dropReason());
                 }
-
-                // 引擎已停止则放弃重试；否则重试次数完全由 RetryStrategy 控制
-                if (started && !running) {
-                    submitStrategy.stop();
-                    return;
-                }
-
-                submitStrategy.update(decision.getReprocessMap());
-            } finally {
                 packCtx.cleanup();
+                submitStrategy.stop();
+                source.commit();
+                return;
             }
+
+            // 引擎已停止则放弃重试；否则重试次数完全由 RetryStrategy 控制
+            if (started && !running) {
+                drainToDeadLetter(packCtx, ProcessingDecision.INTERRUPTED);
+                packCtx.cleanup();
+                submitStrategy.stop();
+                return;
+            }
+
+            submitStrategy.update(decision.getReprocessMap());
+            packCtx.cleanup();
         } while (true);
     }
 
@@ -217,6 +229,22 @@ public class PackProcessor {
                 });
     }
 
+    private void drainToDeadLetter(PackContext packCtx, int reason) {
+        // 显式失败：带原始异常
+        Map<String, Envelope> failed = packCtx.getFailedMap();
+        for (Map.Entry<String, Envelope> e : failed.entrySet()) {
+            Throwable err = packCtx.errorOf(e.getKey());
+            observer.onDeadLetter(source.name(), reason, e.getValue().getMessage(), err);
+            deadLetterSink.accept(e.getValue().getMessage(), reason, err);
+        }
+        // 超时未回：无异常，最容易漏
+        Map<String, Envelope> pending = packCtx.pendingMapSnapshot();
+        for (Map.Entry<String, Envelope> e : pending.entrySet()) {
+            observer.onDeadLetter(source.name(), reason, e.getValue().getMessage(), null);
+            deadLetterSink.accept(e.getValue().getMessage(), reason, null);
+        }
+    }
+
     private static void sleepQuietly(long ms) {
         try {
             Thread.sleep(ms);
@@ -237,6 +265,7 @@ public class PackProcessor {
         private TaskDispatcher dispatcher = KeyOrderedDispatcher.defaultDispatcher();
         private Executor asyncExecutor;
         private EngineObserver observer;
+        private IDeadLetterSink deadLetterSink;
         private int pollSize = 256;
         private long pollIntervalMs = 25L;
         private long packTimeoutMs = 2000L;
@@ -291,6 +320,11 @@ public class PackProcessor {
          */
         public Builder packTimeoutMs(long packTimeoutMs) {
             this.packTimeoutMs = packTimeoutMs;
+            return this;
+        }
+
+        public Builder deadLetterSink(IDeadLetterSink sink) {
+            this.deadLetterSink = sink;
             return this;
         }
 
