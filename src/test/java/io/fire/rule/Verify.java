@@ -32,8 +32,7 @@ public class Verify {
     static void testSerialOrder() throws Exception {
         System.out.println("\n[1] 串行顺序");
         final List<String> order = Collections.synchronizedList(new ArrayList<>());
-        NodeRegistry reg = new NodeRegistry();
-        reg.register(RecorderNode.class);
+        NodeRegistry reg = NodeRegistry.builder().register(RecorderNode.class).build();
         RuleEngine e = RuleEngine.builder().registry(reg)
                 .expressionEngine(new SimpleExpressionEngine())
                 .source(new InMemoryMessageSource("q"))
@@ -57,9 +56,8 @@ public class Verify {
     static void testFanOut() throws Exception {
         System.out.println("\n[2] Fan-out");
         final List<String> got = Collections.synchronizedList(new ArrayList<>());
-        NodeRegistry reg = new NodeRegistry();
-        reg.register(RecorderNode.class);
-        reg.register(FilterNode.class);
+        NodeRegistry reg = NodeRegistry.builder().register(RecorderNode.class)
+                .register(FilterNode.class).build();
         RuleEngine e = RuleEngine.builder().registry(reg)
                 .expressionEngine(new SimpleExpressionEngine())
                 .source(new InMemoryMessageSource("q"))
@@ -83,9 +81,7 @@ public class Verify {
     static void testNestedChain() throws Exception {
         System.out.println("\n[3] 嵌套链");
         final List<String> trace = Collections.synchronizedList(new ArrayList<>());
-        NodeRegistry reg = new NodeRegistry();
-        reg.register(RecorderNode.class);
-        reg.register(SubChainNode.class);
+        NodeRegistry reg = NodeRegistry.builder().register(RecorderNode.class).register(SubChainNode.class).build();
         RuleEngine e = RuleEngine.builder().registry(reg)
                 .expressionEngine(new SimpleExpressionEngine())
                 .source(new InMemoryMessageSource("q"))
@@ -112,8 +108,7 @@ public class Verify {
     static void testFailureRetry() throws Exception {
         System.out.println("\n[4] 失败重试");
         final int[] calls = {0};
-        NodeRegistry reg = new NodeRegistry();
-        reg.register(FlakyNode.class);
+        NodeRegistry reg = NodeRegistry.builder().register(new FlakyNode()).build();
         RuleEngine e = RuleEngine.builder().registry(reg)
                 .expressionEngine(new SimpleExpressionEngine())
                 .source(new InMemoryMessageSource("q"))
@@ -131,8 +126,7 @@ public class Verify {
     // 5. 批次超时：节点卡住不返回，批次应超时而非永久挂起
     static void testPackTimeout() throws Exception {
         System.out.println("\n[5] 批次超时");
-        NodeRegistry reg = new NodeRegistry();
-        reg.register(HangNode.class);
+        NodeRegistry reg = NodeRegistry.builder().register(new HangNode()).build();
         RuleEngine e = RuleEngine.builder().registry(reg)
                 .expressionEngine(new SimpleExpressionEngine())
                 .source(new InMemoryMessageSource("q"))
@@ -151,8 +145,7 @@ public class Verify {
     static void testNodeStateless() throws Exception {
         System.out.println("\n[6] 节点无状态");
         final List<String> seen = Collections.synchronizedList(new ArrayList<>());
-        NodeRegistry reg = new NodeRegistry();
-        reg.register(RecorderNode.class);
+        NodeRegistry reg = NodeRegistry.builder().register(new RecorderNode()).build();
         RuleEngine e = RuleEngine.builder().registry(reg)
                 .expressionEngine(new SimpleExpressionEngine())
                 .source(new InMemoryMessageSource("q"))

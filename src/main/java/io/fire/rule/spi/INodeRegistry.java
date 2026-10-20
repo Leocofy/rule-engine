@@ -1,5 +1,7 @@
 package io.fire.rule.spi;
 
+import java.util.Collection;
+
 /**
  * Description: INodeRegistry
  *
@@ -10,6 +12,10 @@ public interface INodeRegistry {
 
     RuleNode get(String type) throws NodeException;
 
-    <T> T get(Class<T> clazz) throws NodeException;
+    <T> T get(String type, Class<T> requireClazz) throws NodeException;
+
+    NodeDefinition definition(String type);
+
+    Collection<NodeDefinition> definitions();
 
 }

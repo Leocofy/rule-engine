@@ -11,7 +11,7 @@ import org.slf4j.LoggerFactory;
  * <p>注意 {@code onMsg} 里每个分支都要有出口——
  * 漏掉 tellSuccess 消息会一直挂在批次里，直到批次超时才被清理。
  */
-@NodeDefinition(type = "log", category = "debug",
+@NodeComponent(type = "log", category = "debug",
         description = "打印消息内容并放行")
 public class LogNode implements RuleNode {
 

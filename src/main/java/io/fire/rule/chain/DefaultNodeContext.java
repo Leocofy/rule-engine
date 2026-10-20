@@ -1,12 +1,8 @@
 package io.fire.rule.chain;
 
 import io.fire.rule.model.RuleMessage;
-import io.fire.rule.spi.IExpressionEngine;
-import io.fire.rule.spi.IMessageSink;
-import io.fire.rule.spi.INodeContext;
-import io.fire.rule.spi.NodeRegistry;
+import io.fire.rule.spi.*;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -25,28 +21,28 @@ import java.util.concurrent.Executor;
  * </ul>
  * 单机跑得顺、一上集群就出问题，通常就是漏了后者。
  */
-public class DefaultINodeContext implements INodeContext {
+public class DefaultNodeContext implements INodeContext {
 
     private static final Set<String> SUCCESS_ONLY =
-            Collections.unmodifiableSet(new LinkedHashSet<>(Collections.singleton(NodeRegistry.Relations.SUCCESS)));
+            Collections.unmodifiableSet(new LinkedHashSet<>(Collections.singleton(NodeDefinition.Relations.SUCCESS)));
 
     private final ChainExecutor executor;
     private final RuleChain chain;
     private final String nodeId;
-    private final IExpressionEngine IExpressionEngine;
+    private final IExpressionEngine expressionEngine;
     private final Executor asyncExecutor;
     private final IMessageSink sink;
     private final Map<Class<?>, Object> capabilities;
     private final ExecutionCallback callback;
 
-    public DefaultINodeContext(ChainExecutor executor, RuleChain chain, String nodeId,
-                               IExpressionEngine IExpressionEngine, Executor asyncExecutor,
-                               IMessageSink sink, Map<Class<?>, Object> capabilities,
-                               ExecutionCallback callback) {
+    public DefaultNodeContext(ChainExecutor executor, RuleChain chain, String nodeId,
+                              IExpressionEngine expressionEngine, Executor asyncExecutor,
+                              IMessageSink sink, Map<Class<?>, Object> capabilities,
+                              ExecutionCallback callback) {
         this.executor = executor;
         this.chain = chain;
         this.nodeId = nodeId;
-        this.IExpressionEngine = IExpressionEngine;
+        this.expressionEngine = expressionEngine;
         this.asyncExecutor = asyncExecutor;
         this.sink = sink;
         this.capabilities = capabilities != null ? capabilities : new HashMap<>();
@@ -55,7 +51,7 @@ public class DefaultINodeContext implements INodeContext {
 
     @Override
     public void tellSuccess(RuleMessage msg) {
-        tellNext(msg, NodeRegistry.Relations.SUCCESS);
+        tellNext(msg, NodeDefinition.Relations.SUCCESS);
     }
 
     @Override
@@ -100,13 +96,13 @@ public class DefaultINodeContext implements INodeContext {
         // 没有任何下游接住这条关系 → 走到链路尽头。
         // 若当前处于嵌套链中，必须回跳到调用者链，否则子链结果会被静默吞掉。
         if (!anyRouted) {
-            output(msg, NodeRegistry.Relations.SUCCESS);
+            output(msg, NodeDefinition.Relations.SUCCESS);
         }
     }
 
     @Override
     public void tellFailure(RuleMessage msg, Throwable t) {
-        List<String> targets = chain.downstream(nodeId, NodeRegistry.Relations.FAILURE);
+        List<String> targets = chain.downstream(nodeId, NodeDefinition.Relations.FAILURE);
         if (targets.isEmpty()) {
             // Failure 无人接管 → 整条消息判失败
             if (callback != null) {
@@ -169,7 +165,7 @@ public class DefaultINodeContext implements INodeContext {
 
     @Override
     public void output(RuleMessage msg, String relationType) {
-        outputRecursive(msg, relationType == null ? NodeRegistry.Relations.SUCCESS : relationType);
+        outputRecursive(msg, relationType == null ? NodeDefinition.Relations.SUCCESS : relationType);
     }
 
     /**
@@ -229,7 +225,7 @@ public class DefaultINodeContext implements INodeContext {
 
     @Override
     public IExpressionEngine expressionEngine() {
-        return IExpressionEngine;
+        return expressionEngine;
     }
 
     @SuppressWarnings("unchecked")

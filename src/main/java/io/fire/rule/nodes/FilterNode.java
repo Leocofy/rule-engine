@@ -10,7 +10,7 @@ import io.fire.rule.spi.IExpressionEngine;
  * <p>节点本身不知道下游是谁——它只声明"这条消息属于 True"。
  * 这就是"关系名代替 if/else"的实际样子。
  */
-@NodeDefinition(type = "filter", category = "filter",
+@NodeComponent(type = "filter", category = "filter",
         description = "按条件分流到 True / False",
         relations = {"True", "False"})
 public class FilterNode implements RuleNode {

@@ -134,7 +134,7 @@ public class ChainExecutor {
             return;
         }
         // 复用 DefaultNodeContext 的路由逻辑：它持有 nodeId，查邻接表即可
-        INodeContext ctx = new DefaultINodeContext(this, chain, nodeId,
+        INodeContext ctx = new DefaultNodeContext(this, chain, nodeId,
                 expressionEngine, asyncExecutor, sink, capabilities, callback);
         ctx.tellNext(msg, relations);
     }
@@ -147,7 +147,7 @@ public class ChainExecutor {
             callback.onComplete();
             return;
         }
-        INodeContext ctx = new DefaultINodeContext(this, chain, nodeId,
+        INodeContext ctx = new DefaultNodeContext(this, chain, nodeId,
                 expressionEngine, asyncExecutor, sink, capabilities, callback);
 
         long start = System.nanoTime();

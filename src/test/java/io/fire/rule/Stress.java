@@ -17,9 +17,7 @@ public class Stress {
         final AtomicInteger processed = new AtomicInteger();
         final AtomicInteger errors = new AtomicInteger();
 
-        NodeRegistry reg = new NodeRegistry();
-        reg.register(StressNode.class);
-        reg.register(FilterNode.class);
+        NodeRegistry reg = NodeRegistry.builder().register(StressNode.class).register(FilterNode.class).build();
 
         int lanes = 16;
         RuleEngine e = RuleEngine.builder()

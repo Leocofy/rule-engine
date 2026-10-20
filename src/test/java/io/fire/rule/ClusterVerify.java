@@ -64,9 +64,11 @@ public class ClusterVerify {
         final AtomicInteger execCount = new AtomicInteger();
 
         // 构造一个会触发跨节点投递的场景
-        NodeRegistry reg = new NodeRegistry();
-        reg.register(TraceNode.class);
-        reg.register(CrossNode.class);
+        NodeRegistry reg = new NodeRegistry.Builder()
+                .autoDiscover(true)
+                .register(TraceNode.class)
+                .register(CrossNode.class)
+                .build();
 
         // 实例 B：拥有分区 1
         HashPartitionRouter routerB = HashPartitionRouter.staticAssign("node-B", 4, 1, 4);
@@ -124,9 +126,10 @@ public class ClusterVerify {
         JsonMessageSerializer ser = new JsonMessageSerializer();
         HashPartitionRouter router = HashPartitionRouter.staticAssign("node-1", 8, 0, 1); // 独占全部
 
-        NodeRegistry reg = new NodeRegistry();
-        reg.register(TraceNode.class);
-        reg.register(CrossNode.class);
+        NodeRegistry reg = new NodeRegistry.Builder()
+                .register(TraceNode.class)
+                .register(CrossNode.class)
+                .build();
         RuleEngine e = RuleEngine.builder()
                 .registry(reg).expressionEngine(new SimpleExpressionEngine())
                 .source(new PartitionedMessageSource("q", router, ser, broker, 64))

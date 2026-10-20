@@ -21,12 +21,13 @@ public class EngineDemo {
 
     public static void main(String[] args) throws Exception {
         // 1. 注册节点库
-        NodeRegistry registry = new NodeRegistry();
-        registry.register(LogNode.class);
-        registry.register(FilterNode.class);
-        registry.register(TransformNode.class);
-        registry.register(AiDecisionNode.class);
-        registry.register(AsyncSinkNode.class);
+        NodeRegistry registry = NodeRegistry.builder()
+                .register(LogNode.class)
+                .register(FilterNode.class)
+                .register(TransformNode.class)
+                .register(AiDecisionNode.class)
+                .register(AsyncSinkNode.class)
+                .build();
 
         // 2. 消息源（生产环境替换为 Kafka / RabbitMQ 实现）
         InMemoryMessageSource source = new InMemoryMessageSource("main");

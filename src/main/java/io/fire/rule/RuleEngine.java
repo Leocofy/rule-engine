@@ -8,7 +8,10 @@ import io.fire.rule.cluster.PartitionRouter;
 import io.fire.rule.config.JsonChainLoader;
 import io.fire.rule.model.RuleMessage;
 import io.fire.rule.observability.EngineObserver;
-import io.fire.rule.runtime.*;
+import io.fire.rule.runtime.Envelope;
+import io.fire.rule.runtime.MessageSource;
+import io.fire.rule.runtime.PackProcessor;
+import io.fire.rule.runtime.RetryStrategy;
 import io.fire.rule.runtime.dispatcher.KeyOrderedDispatcher;
 import io.fire.rule.runtime.dispatcher.TaskDispatcher;
 import io.fire.rule.runtime.strategy.BurstSubmitStrategy;
@@ -157,8 +160,16 @@ public class RuleEngine {
         return new Builder();
     }
 
+    public static NodeRegistry defaultRegistry() {
+        try {
+            return NodeRegistry.builder().build();
+        } catch (NodeException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     public static final class Builder {
-        private NodeRegistry registry = new NodeRegistry();
+        private NodeRegistry registry = NodeRegistry.defaultRegistry();
         private IExpressionEngine expressionEngine;
         private MessageSource source;
         private IMessageSink sink;

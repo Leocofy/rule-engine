@@ -4,7 +4,7 @@ import io.fire.rule.model.RuleMessage;
 import io.fire.rule.spi.*;
 
 /** 永远不返回，用于验证批次超时 */
-@NodeDefinition(type = "hang", category = "debug")
+@NodeComponent(type = "hang", category = "debug")
 public class HangNode implements RuleNode {
     public void init(INodeContext ctx, NodeConfig config) throws NodeException {}
     public void onMsg(INodeContext ctx, RuleMessage msg) throws Exception {

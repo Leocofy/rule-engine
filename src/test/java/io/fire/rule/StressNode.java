@@ -3,7 +3,7 @@ package io.fire.rule;
 import io.fire.rule.model.RuleMessage;
 import io.fire.rule.spi.*;
 
-@NodeDefinition(type = "stress", category = "debug")
+@NodeComponent(type = "stress", category = "debug")
 public class StressNode implements RuleNode {
     public interface Sink { void accept(String dev, int seq); }
     public void init(INodeContext ctx, NodeConfig c) throws NodeException {}

@@ -3,7 +3,7 @@ package io.fire.rule;
 import io.fire.rule.model.RuleMessage;
 import io.fire.rule.spi.*;
 
-@NodeDefinition(type = "recorder", category = "debug")
+@NodeComponent(type = "recorder", category = "debug")
 public class RecorderNode implements RuleNode {
     public interface Sink { void accept(String s); }
     private String tag;

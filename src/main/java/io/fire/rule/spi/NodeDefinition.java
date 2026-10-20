@@ -1,39 +1,102 @@
 package io.fire.rule.spi;
 
-import java.lang.annotation.Documented;
-import java.lang.annotation.ElementType;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.lang.annotation.Target;
-
 /**
- * 节点自描述注解：让节点成为"可发现组件"。
+ * Description: NodeDefinition
  *
- * <p>注册表据此建立 type -> 实现类的映射，前端据此渲染配置表单。
- * 这是引擎从"硬编码节点"走向"可扩展节点库"的关键。
- *
- * <p><b>customRelations=true</b> 表示输出关系由运行时决定（如 AI 判定节点），
- * 配置期无法确定，引擎不会校验其下游连线。
+ * @author Cai FeiYue
+ * @date 2026/10/20
  */
-@Documented
-@Retention(RetentionPolicy.RUNTIME)
-@Target(ElementType.TYPE)
-public @interface NodeDefinition {
+public class NodeDefinition {
 
-    /** 节点类型标识，规则链 JSON 中引用，如 "jsonata-transform"。 */
-    String type();
+    private String type;
 
-    /** 分类，用于前端分组展示。 */
-    String category() default "action";
+    private String title;
 
-    String description() default "";
+    private String description;
 
-    /** 声明的输出关系名；为空表示使用默认的 Success / Failure。 */
-    String[] relations() default {};
+    private String category;
 
-    /** 输出关系是否由运行时动态决定。 */
-    boolean customRelations() default false;
+    private String version;
 
-    /** 当前配置版本号，用于 upgrade 迁移。 */
-    int version() default 1;
+    private String[] relations;
+
+    private boolean customRelations;
+
+    public NodeDefinition(NodeComponent def) {
+        this.type = def.type();
+        this.title = def.title();
+        this.description = def.description();
+        this.category = def.category();
+        this.version = def.version();
+        this.relations = def.relations();
+        this.customRelations = def.customRelations();
+        this.relations = def.relations();
+    }
+
+    public String getType() {
+        return type;
+    }
+
+    public void setType(String type) {
+        this.type = type;
+    }
+
+    public String getTitle() {
+        return title;
+    }
+
+    public void setTitle(String title) {
+        this.title = title;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    public String getCategory() {
+        return category;
+    }
+
+    public void setCategory(String category) {
+        this.category = category;
+    }
+
+    public String getVersion() {
+        return version;
+    }
+
+    public void setVersion(String version) {
+        this.version = version;
+    }
+
+    public String[] getRelations() {
+        return relations;
+    }
+
+    public void setRelations(String[] relations) {
+        this.relations = relations;
+    }
+
+    public boolean isCustomRelations() {
+        return customRelations;
+    }
+
+    public void setCustomRelations(boolean customRelations) {
+        this.customRelations = customRelations;
+    }
+
+    /**
+     * 常用关系名常量。业务可自定义，如 "有隐患" / "需现场复核"。
+     */
+    public interface Relations {
+        String SUCCESS = "Success";
+        String FAILURE = "Failure";
+        String TRUE = "True";
+        String FALSE = "False";
+    }
+
 }

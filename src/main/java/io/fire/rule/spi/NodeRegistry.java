@@ -8,114 +8,184 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * <p>支持两种注册方式：
  * <ol>
- *   <li>手工注册 {@link #register(Class)} —— 明确、便于测试</li>
  *   <li>SPI 自动发现 {@link #discover()} —— 通过 META-INF/services 让 jar 自带节点，
  *       新增节点库无需改引擎代码</li>
  * </ol>
  */
 public final class NodeRegistry implements INodeRegistry {
 
-    private final Map<String, Class<? extends RuleNode>> nodes = new ConcurrentHashMap<>();
-    private final Map<String, NodeDefinition> definitions = new ConcurrentHashMap<>();
-    private final Map<Class<? extends RuleNode>, RuleNode> instances = new ConcurrentHashMap<>();
-
-    public void register(Class<? extends RuleNode> nodeClass) throws NodeException {
-        NodeDefinition def = nodeClass.getAnnotation(NodeDefinition.class);
-        if (def == null) {
-            throw new NodeException("节点缺少 @NodeDefinition 注解: " + nodeClass.getName(), true);
+    private static final INodeRegistry NOOP = new INodeRegistry() {
+        @Override
+        public NodeDefinition definition(String type) {
+            return null;
         }
-        if (nodes.containsKey(def.type())) {
+
+        @Override
+        public Collection<NodeDefinition> definitions() {
+            return Collections.emptySet();
+        }
+
+        @Override
+        public RuleNode get(String type) {
+            return null;
+        }
+
+        @Override
+        public <T> T get(String type, Class<T> requireClazz) {
+            return null;
+        }
+    };
+
+    private final Map<String, NodeDefinition> DEFINITIONS = new ConcurrentHashMap<>(12);
+
+    /**
+     * 一级缓存，节点类型 -> 节点
+     */
+    private final Map<String, RuleNode> NODES = new ConcurrentHashMap<>(12);
+
+    /**
+     * 用于 spring 集成，将 spi 注册的节点也纳入 spring 管理
+     */
+    private final INodeRegistry registry;
+
+    private NodeRegistry(Builder builder) throws NodeException {
+        this.registry = builder.registry;
+
+        if (builder.autoDiscover) {
+            discover();
+        }
+
+        for (RuleNode node : builder.nodes.values()) {
+            register(node);
+        }
+    }
+
+    private void register(RuleNode node) throws NodeException {
+        Class<? extends RuleNode> clazz = node.getClass();
+        NodeComponent def = clazz.getAnnotation(NodeComponent.class);
+        if (def == null) {
+            throw new NodeException("节点缺少 @NodeDefinition 注解: " + clazz.getName(), true);
+        }
+        if (NODES.containsKey(def.type())) {
             throw new NodeException("节点类型重复注册: " + def.type(), true);
         }
-        nodes.put(def.type(), nodeClass);
-        definitions.put(def.type(), def);
+        NODES.put(def.type(), node);
+        DEFINITIONS.put(def.type(), new NodeDefinition(def));
     }
 
     /**
      * 通过 JDK SPI 扫描 classpath 下所有 RuleNode 实现。
      */
-    public int discover() throws NodeException {
+    private int discover() throws NodeException {
         int count = 0;
         ServiceLoader<RuleNode> loader = ServiceLoader.load(RuleNode.class);
         for (RuleNode node : loader) {
-            Class<? extends RuleNode> clazz = node.getClass();
-            NodeDefinition def = clazz.getAnnotation(NodeDefinition.class);
-            if (def == null || nodes.containsKey(def.type())) {
-                continue;
-            }
-            nodes.put(def.type(), clazz);
-            definitions.put(def.type(), def);
+            register(node);
             count++;
         }
         return count;
     }
 
-    public RuleNode create(String type) throws NodeException {
-        Class<? extends RuleNode> clazz = nodes.get(type);
-        if (instances.containsKey(clazz)) {
-            return instances.get(clazz);
-        }
-        if (clazz == null) {
+    private RuleNode getNode(String type) throws NodeException {
+        RuleNode node = NODES.get(type);
+        if (node == null) {
             throw new NodeException("未注册的节点类型: " + type, true);
         }
-        try {
-            RuleNode instance = clazz.getDeclaredConstructor().newInstance();
-            instances.put(clazz, instance);
-            return instance;
-        } catch (Exception e) {
-            throw new NodeException("节点实例化失败: " + type, e);
-        }
+        return node;
     }
 
+    @Override
     public NodeDefinition definition(String type) {
-        return definitions.get(type);
-    }
-
-    public Set<String> types() {
-        return Collections.unmodifiableSet(nodes.keySet());
+        NodeDefinition definition = registry.definition(type);
+        if (definition == null) {
+            definition = DEFINITIONS.get(type);
+        }
+        return definition;
     }
 
     /**
      * 导出给前端做节点面板，或用于配置校验。
      */
+    @Override
     public Collection<NodeDefinition> definitions() {
-        return Collections.unmodifiableCollection(new ArrayList<NodeDefinition>(definitions.values()));
-    }
-
-    public List<String> declaredRelations(String type) {
-        NodeDefinition def = definitions.get(type);
-        if (def == null || def.relations().length == 0) {
-            List<String> defaults = new ArrayList<String>();
-            defaults.add(Relations.SUCCESS);
-            defaults.add(Relations.FAILURE);
-            return defaults;
-        }
-        List<String> rels = new ArrayList<String>();
-        for (String r : def.relations()) {
-            rels.add(r);
-        }
-        return rels;
+        Collection<NodeDefinition> def = registry.definitions();
+        List<NodeDefinition> definitions = new ArrayList<>(def.size() + DEFINITIONS.size());
+        definitions.addAll(def);
+        definitions.addAll(DEFINITIONS.values());
+        return Collections.unmodifiableCollection(definitions);
     }
 
     @Override
     public RuleNode get(String type) throws NodeException {
-        return create(type);
+        RuleNode ruleNode = registry.get(type);
+        if (ruleNode != null)
+            return ruleNode;
+        else return getNode(type);
     }
 
     @Override
     @SuppressWarnings("unchecked")
-    public <T> T get(Class<T> clazz) throws NodeException {
-        return (T) instances.get(clazz);
+    public <T> T get(String type, Class<T> requireClazz) throws NodeException {
+        T node = registry.get(type, requireClazz);
+        if (node != null) return node;
+        return (T) getNode(type);
     }
 
-    /**
-     * 常用关系名常量。业务可自定义，如 "有隐患" / "需现场复核"。
-     */
-    public interface Relations {
-        String SUCCESS = "Success";
-        String FAILURE = "Failure";
-        String TRUE = "True";
-        String FALSE = "False";
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    public static NodeRegistry defaultRegistry() {
+        try {
+            return builder().autoDiscover(true).build();
+        } catch (NodeException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public static class Builder {
+        private INodeRegistry registry = NOOP;
+        private final Map<Class<? extends RuleNode>, RuleNode> nodes = new ConcurrentHashMap<>();
+        private boolean autoDiscover = false;
+
+        public Builder autoDiscover(boolean autoDiscover) {
+            this.autoDiscover = autoDiscover;
+            return this;
+        }
+
+        public Builder register(RuleNode node) {
+            this.nodes.put(node.getClass(), node);
+            return this;
+        }
+
+        public Builder register(Class<? extends RuleNode> nodeClazz, Object... args) throws NodeException {
+            try {
+                RuleNode node;
+                if (args == null || args.length == 0) {
+                    node = nodeClazz.getDeclaredConstructor().newInstance();
+                } else {
+                    Class<?>[] argTypes = new Class<?>[args.length];
+                    for (int i = 0; i < args.length; i++) {
+                        argTypes[i] = args[i].getClass();
+                    }
+                    node = nodeClazz.getDeclaredConstructor(argTypes).newInstance(args);
+                }
+
+                this.nodes.put(node.getClass(), node);
+            } catch (Exception e) {
+                throw new NodeException("Failed to instantiate " + nodeClazz, e);
+            }
+            return this;
+        }
+
+        public Builder registry(INodeRegistry registry) {
+            this.registry = registry;
+            return this;
+        }
+
+        public NodeRegistry build() throws NodeException {
+            return new NodeRegistry(this);
+        }
     }
 
 }

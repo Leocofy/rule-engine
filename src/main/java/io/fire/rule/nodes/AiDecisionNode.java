@@ -1,11 +1,7 @@
 package io.fire.rule.nodes;
 
 import io.fire.rule.model.RuleMessage;
-import io.fire.rule.spi.NodeConfig;
-import io.fire.rule.spi.INodeContext;
-import io.fire.rule.spi.NodeDefinition;
-import io.fire.rule.spi.NodeException;
-import io.fire.rule.spi.RuleNode;
+import io.fire.rule.spi.*;
 
 import java.util.Set;
 
@@ -24,12 +20,14 @@ import java.util.Set;
  *   <li>百万设备场景必须"规则预筛 + AI 抽稀"，不能每条消息都调模型</li>
  * </ol>
  */
-@NodeDefinition(type = "aiDecision", category = "ai",
+@NodeComponent(type = "aiDecision", category = "ai",
         description = "调用 AI 智能体判定，结论作为关系名输出",
         customRelations = true)
 public class AiDecisionNode implements RuleNode {
 
-    /** 业务侧实现该接口并注入 capability，引擎不绑定任何具体模型。 */
+    /**
+     * 业务侧实现该接口并注入 capability，引擎不绑定任何具体模型。
+     */
     public interface DecisionService {
         String decide(String agent, RuleMessage msg) throws Exception;
     }

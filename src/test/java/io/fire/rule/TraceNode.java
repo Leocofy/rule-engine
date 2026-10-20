@@ -2,7 +2,7 @@ package io.fire.rule;
 
 import io.fire.rule.model.RuleMessage;
 import io.fire.rule.spi.*;
-@NodeDefinition(type = "trace", category = "debug")
+@NodeComponent(type = "trace", category = "debug")
 public class TraceNode implements RuleNode {
     public interface Sink { void accept(String s); }
     private String tag;
