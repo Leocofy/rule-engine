@@ -2,7 +2,6 @@ package io.fire.rule.runtime;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.UUID;
 
 /**
  * 重试策略：整批处理失败后怎么办。
