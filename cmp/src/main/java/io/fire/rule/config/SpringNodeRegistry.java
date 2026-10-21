@@ -4,20 +4,21 @@ import io.fire.rule.spi.*;
 import org.springframework.beans.BeansException;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
-import org.springframework.context.annotation.Configuration;
 
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 /**
- * Description: SpringNodeRegistry
+ * Spring 节点注册表：从 ApplicationContext 中收集所有 {@link RuleNode} bean，
+ * 按 {@link NodeComponent#type()} 建立映射。
+ *
+ * <p>由 {@link RuleEngineAutoConfiguration} 自动创建，无需手动注册。
+ * 业务侧只需把自定义节点声明为 Spring bean 即可被引擎发现。
  *
  * @author Cai FeiYue
  * @date 2026/10/21
  */
-@Configuration
 public class SpringNodeRegistry implements INodeRegistry, ApplicationContextAware {
 
     private final Map<String, RuleNode> ruleNodes = new HashMap<>(16);
@@ -53,6 +54,9 @@ public class SpringNodeRegistry implements INodeRegistry, ApplicationContextAwar
         Map<String, RuleNode> beans = context.getBeansOfType(RuleNode.class);
         for (RuleNode node : beans.values()) {
             NodeComponent cmp = node.getClass().getAnnotation(NodeComponent.class);
+            if (cmp == null) {
+                continue;
+            }
             ruleNodes.put(cmp.type(), node);
             definitions.put(cmp.type(), new NodeDefinition(cmp));
         }

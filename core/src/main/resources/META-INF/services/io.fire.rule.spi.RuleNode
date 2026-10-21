@@ -1,7 +1,4 @@
 # 内置节点：通过 JDK SPI 自动发现
 # 新增节点库只需在自己的 jar 中提供同名文件，无需修改引擎代码
 io.fire.rule.nodes.LogNode
-io.fire.rule.nodes.FilterNode
 io.fire.rule.nodes.TransformNode
-io.fire.rule.nodes.AiDecisionNode
-io.fire.rule.nodes.AsyncSinkNode

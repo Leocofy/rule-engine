@@ -1,22 +1,25 @@
-package io.fire.rule.nodes;
+package io.fire.rule.example.node;
 
 import io.fire.rule.model.RuleMessage;
-import io.fire.rule.spi.*;
+import io.fire.rule.spi.INodeContext;
+import io.fire.rule.spi.NodeComponent;
+import io.fire.rule.spi.NodeConfig;
+import io.fire.rule.spi.NodeException;
+import io.fire.rule.spi.RuleNode;
 
 /**
  * 异步外部调用节点：示范"耗时 I/O 必须外置线程池"。
  *
- * <p>落库、HTTP、发短信这类操作如果跑在调度线程上，
- * 慢 I/O 会迅速耗尽线程池，导致整个引擎停滞。
- * 官方实现专门提供 dbCallback / externalCall / mail 等独立线程池，就是这个原因。
+ * <p>业务侧实现 {@link SinkHandler} 并通过 {@code RuleEngineCustomizer}
+ * 注入 capability。
+ *
+ * @author Cai FeiYue
+ * @date 2026/10/21
  */
 @NodeComponent(type = "asyncSink", category = "external",
         description = "异步调用外部系统（落库/HTTP/通知）")
 public class AsyncSinkNode implements RuleNode {
 
-    /**
-     * 业务实现该接口，引擎不关心具体写什么。
-     */
     public interface SinkHandler {
         void handle(RuleMessage msg) throws Exception;
     }

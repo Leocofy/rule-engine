@@ -12,6 +12,7 @@
     <modules>
         <module>core</module>
         <module>cmp</module>
+        <module>example</module>
     </modules>
 
     <parent>

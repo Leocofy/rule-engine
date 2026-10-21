@@ -1,14 +1,18 @@
-package io.fire.rule.nodes;
+package io.fire.rule.example.node;
 
 import io.fire.rule.model.RuleMessage;
-import io.fire.rule.spi.*;
 import io.fire.rule.spi.IExpressionEngine;
+import io.fire.rule.spi.INodeContext;
+import io.fire.rule.spi.NodeComponent;
+import io.fire.rule.spi.NodeConfig;
+import io.fire.rule.spi.NodeException;
+import io.fire.rule.spi.RuleNode;
 
 /**
  * 过滤节点：按条件把消息分到 True / False 两条关系。
  *
- * <p>节点本身不知道下游是谁——它只声明"这条消息属于 True"。
- * 这就是"关系名代替 if/else"的实际样子。
+ * @author Cai FeiYue
+ * @date 2026/10/21
  */
 @NodeComponent(type = "filter", category = "filter",
         description = "按条件分流到 True / False",
