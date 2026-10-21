@@ -21,11 +21,11 @@ public final class MetaData {
     private final Map<String, String> data;
 
     public MetaData() {
-        this.data = new LinkedHashMap<String, String>();
+        this.data = new LinkedHashMap<>();
     }
 
     public MetaData(Map<String, String> data) {
-        this.data = new LinkedHashMap<String, String>();
+        this.data = new LinkedHashMap<>();
         if (data != null) {
             this.data.putAll(data);
         }

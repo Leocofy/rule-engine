@@ -38,7 +38,7 @@ public class InMemoryMessageSource implements MessageSource {
                     queue.drainTo(batch, maxCount - 1);
                 }
             } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
+                e.printStackTrace();
             }
         }
         synchronized (pendingAck) {

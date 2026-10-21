@@ -84,7 +84,7 @@ public class PackContext {
      * 该分支已完成；返回 true 表示所有分支都完成，可以收口。
      */
     private boolean branchDone(String id) {
-        java.util.concurrent.atomic.AtomicInteger r = fanOutRemaining.get(id);
+        AtomicInteger r = fanOutRemaining.get(id);
         if (r == null) {
             return true;
         }

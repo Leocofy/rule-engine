@@ -26,7 +26,7 @@ public class LogNode implements RuleNode {
 
     @Override
     public void onMsg(INodeContext ctx, RuleMessage msg) throws Exception {
-        LOG.info("{} {} \noriginator={} \npayload={} \nmeta={}", prefix, msg.getType(),
+        LOG.info("{} {} originator={} payload={} meta={}", prefix, msg.getType(),
                 msg.getOriginator(), msg.getPayload(), msg.getMetaData().values());
         ctx.tellSuccess(msg);
     }

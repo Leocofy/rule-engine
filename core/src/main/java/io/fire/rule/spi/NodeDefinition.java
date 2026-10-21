@@ -89,14 +89,4 @@ public class NodeDefinition {
         this.customRelations = customRelations;
     }
 
-    /**
-     * 常用关系名常量。业务可自定义，如 "有隐患" / "需现场复核"。
-     */
-    public interface Relations {
-        String SUCCESS = "Success";
-        String FAILURE = "Failure";
-        String TRUE = "True";
-        String FALSE = "False";
-    }
-
 }

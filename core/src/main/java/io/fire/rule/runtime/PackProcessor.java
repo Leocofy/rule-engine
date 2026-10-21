@@ -195,11 +195,11 @@ public class PackProcessor {
                 () -> {
                     try {
                         // 跨节点恢复的消息带 relations，走 resume 而非 execute
-                        Set<String> rels = envelope.getRelations();
-                        if (rels != null && !rels.isEmpty()
-                                && msg.getNodeId() != null && msg.getChainId() != null) {
+                        Set<String> relations = envelope.getRelations();
+                        if (relations != null && !relations.isEmpty() && msg.getNodeId() != null
+                                && msg.getChainId() != null) {
                             chainExecutor.resume(msg.getChainId(), msg.getNodeId(),
-                                    msg, rels, new ExecutionCallback() {
+                                    msg, relations, new ExecutionCallback() {
                                         @Override
                                         public void onComplete() {
                                             packCtx.onSuccess(id);

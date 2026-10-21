@@ -1,5 +1,7 @@
 package io.fire.rule.spi;
 
+import io.fire.rule.runtime.TaskExecuteException;
+
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -64,7 +66,7 @@ public final class NodeRegistry implements INodeRegistry {
         Class<? extends RuleNode> clazz = node.getClass();
         NodeComponent def = clazz.getAnnotation(NodeComponent.class);
         if (def == null) {
-            throw new NodeException("节点缺少 @NodeDefinition 注解: " + clazz.getName(), true);
+            throw new NodeException("节点缺少 @NodeComponent 注解: " + clazz.getName(), true);
         }
         if (NODES.containsKey(def.type())) {
             throw new NodeException("节点类型重复注册: " + def.type(), true);
@@ -136,11 +138,7 @@ public final class NodeRegistry implements INodeRegistry {
     }
 
     public static NodeRegistry defaultRegistry() {
-        try {
-            return builder().autoDiscover(true).build();
-        } catch (NodeException e) {
-            throw new RuntimeException(e);
-        }
+        return builder().autoDiscover(true).build();
     }
 
     public static class Builder {
@@ -183,8 +181,12 @@ public final class NodeRegistry implements INodeRegistry {
             return this;
         }
 
-        public NodeRegistry build() throws NodeException {
-            return new NodeRegistry(this);
+        public NodeRegistry build() {
+            try {
+                return new NodeRegistry(this);
+            } catch (NodeException e) {
+                throw new TaskExecuteException("Failed to build NodeRegistry", e);
+            }
         }
     }
 

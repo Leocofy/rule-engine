@@ -20,33 +20,54 @@ import java.util.concurrent.Executor;
  */
 public interface INodeContext {
 
+    String REL_SUCCESS = "Success";
+    String REL_FAILURE = "Failure";
+
     // ---------- 消息流控 ----------
 
-    /** 投递到所有通过 "Success" 关系连接的下游节点。 */
+    /**
+     * 投递到所有通过 "Success" 关系连接的下游节点。
+     */
     void tellSuccess(RuleMessage msg);
 
-    /** 按单个关系名投递。 */
+    /**
+     * 按单个关系名投递。
+     */
     void tellNext(RuleMessage msg, String relationType);
 
-    /** 按多个关系名投递（fan-out）。 */
+    /**
+     * 按多个关系名投递（fan-out）。
+     */
     void tellNext(RuleMessage msg, Set<String> relationTypes);
 
-    /** 走 Failure 关系。 */
+    /**
+     * 走 Failure 关系。
+     */
     void tellFailure(RuleMessage msg, Throwable t);
 
-    /** 延迟投给自己，用于周期任务 / 超时检查（不落队列，重启丢失）。 */
+    /**
+     * 延迟投给自己，用于周期任务 / 超时检查（不落队列，重启丢失）。
+     */
     void tellSelf(RuleMessage msg, long delayMs);
 
-    /** 跨节点投递：序列化后进队列，保证崩溃可恢复。 */
+    /**
+     * 跨节点投递：序列化后进队列，保证崩溃可恢复。
+     */
     void enqueueForTellNext(RuleMessage msg, String relationType);
 
-    /** 进入嵌套规则链（会做循环检测）。 */
+    /**
+     * 进入嵌套规则链（会做循环检测）。
+     */
     void input(RuleMessage msg, String chainId);
 
-    /** 从嵌套链回到调用者链；已处于顶层则直接 ack。 */
+    /**
+     * 从嵌套链回到调用者链；已处于顶层则直接 ack。
+     */
     void output(RuleMessage msg, String relationType);
 
-    /** 本节点处理完成，确认。 */
+    /**
+     * 本节点处理完成，确认。
+     */
     void ack(RuleMessage msg);
 
     // ---------- 消息构造 ----------
@@ -55,13 +76,19 @@ public interface INodeContext {
 
     // ---------- 资源 ----------
 
-    /** 耗时 I/O 专用线程池，避免占满调度线程。 */
+    /**
+     * 耗时 I/O 专用线程池，避免占满调度线程。
+     */
     Executor asyncExecutor();
 
-    /** 表达式/脚本引擎，可插拔（Jsonata、Aviator、Groovy 等）。 */
+    /**
+     * 表达式/脚本引擎，可插拔（Jsonata、Aviator、Groovy 等）。
+     */
     IExpressionEngine expressionEngine();
 
-    /** 按需获取业务能力，避免接口膨胀成上帝对象。 */
+    /**
+     * 按需获取业务能力，避免接口膨胀成上帝对象。
+     */
     <T> T capability(Class<T> type);
 
     String getChainId();

@@ -61,12 +61,9 @@ public class KeyOrderedDispatcher implements TaskDispatcher {
      * 同一 key 的批量任务一次入队，减少哈希与调度开销。
      */
     public void executeBatch(String key, final Iterable<Runnable> tasks) {
-        lanes[laneIndex(key)].execute(new Runnable() {
-            @Override
-            public void run() {
-                for (Runnable t : tasks) {
-                    t.run();
-                }
+        lanes[laneIndex(key)].execute(() -> {
+            for (Runnable t : tasks) {
+                t.run();
             }
         });
     }

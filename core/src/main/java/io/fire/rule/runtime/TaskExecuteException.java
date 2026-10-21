@@ -12,6 +12,14 @@ public class TaskExecuteException extends RuntimeException {
         super(message);
     }
 
+    public TaskExecuteException(Class<?> clazz, String msg) {
+        super(clazz.getSimpleName() + ": " + msg);
+    }
+
+    public TaskExecuteException(Class<?> clazz, String msg, Throwable cause) {
+        super(clazz.getSimpleName() + ": " + msg, cause);
+    }
+
     public TaskExecuteException(String message, Throwable cause) {
         super(message, cause);
     }

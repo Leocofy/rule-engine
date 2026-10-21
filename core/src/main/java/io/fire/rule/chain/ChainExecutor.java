@@ -2,6 +2,7 @@ package io.fire.rule.chain;
 
 import io.fire.rule.model.RuleMessage;
 import io.fire.rule.observability.EngineObserver;
+import io.fire.rule.runtime.TaskExecuteException;
 import io.fire.rule.spi.IExpressionEngine;
 import io.fire.rule.spi.IMessageSink;
 import io.fire.rule.spi.INodeContext;
@@ -77,14 +78,11 @@ public class ChainExecutor {
     public void execute(RuleMessage msg, ExecutionCallback callback) {
         String chainId = msg.getChainId();
         if (chainId == null) {
-            // 消息未指定目标链时走默认链——避免"消息进来了却静默丢弃"
-            chainId = defaultChainId != null ? defaultChainId
-                    : (chains.size() == 1 ? chains.keySet().iterator().next() : null);
-        }
-        if (chainId == null) {
-            callback.onError(new IllegalStateException(
-                    "消息未指定 chainId，且引擎未配置默认链（已注册: " + chains.keySet() + "）"));
-            return;
+            if (defaultChainId != null) {
+                chainId = defaultChainId;
+            } else {
+                callback.onError(new IllegalStateException("未指定规则链 ID"));
+            }
         }
         executeInternal(msg.copy().chainId(chainId).build(), callback);
     }
@@ -134,8 +132,16 @@ public class ChainExecutor {
             return;
         }
         // 复用 DefaultNodeContext 的路由逻辑：它持有 nodeId，查邻接表即可
-        INodeContext ctx = new DefaultNodeContext(this, chain, nodeId,
-                expressionEngine, asyncExecutor, sink, capabilities, callback);
+        INodeContext ctx = DefaultNodeContext.builder()
+                .executor(this)
+                .chain(chain)
+                .nodeId(nodeId)
+                .expressionEngine(expressionEngine)
+                .asyncExecutor(asyncExecutor)
+                .sink(sink)
+                .capabilities(capabilities)
+                .callback(callback)
+                .build();
         ctx.tellNext(msg, relations);
     }
 
@@ -147,8 +153,16 @@ public class ChainExecutor {
             callback.onComplete();
             return;
         }
-        INodeContext ctx = new DefaultNodeContext(this, chain, nodeId,
-                expressionEngine, asyncExecutor, sink, capabilities, callback);
+        INodeContext ctx = DefaultNodeContext.builder()
+                .executor(this)
+                .chain(chain)
+                .nodeId(nodeId)
+                .expressionEngine(expressionEngine)
+                .asyncExecutor(asyncExecutor)
+                .sink(sink)
+                .capabilities(capabilities)
+                .callback(callback)
+                .build();
 
         long start = System.nanoTime();
         try {
@@ -164,12 +178,7 @@ public class ChainExecutor {
     /** tellSelf：延迟投递给自己，用于周期任务 / 超时检查。 */
     public void scheduleSelf(final RuleChain chain, final String nodeId,
                              final RuleMessage msg, long delayMs) {
-        scheduler.schedule(new Runnable() {
-            @Override
-            public void run() {
-                dispatch(chain, nodeId, msg, ExecutionCallback.NOOP);
-            }
-        }, delayMs, TimeUnit.MILLISECONDS);
+        scheduler.schedule(() -> dispatch(chain, nodeId, msg, ExecutionCallback.NOOP), delayMs, TimeUnit.MILLISECONDS);
     }
 
     public void shutdown() {

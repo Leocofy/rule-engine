@@ -43,6 +43,7 @@ public class EngineDemo {
                 .observer(stats)
                 .submitStrategy(new SequentialByKeySubmitStrategy())
                 .packTimeoutMs(3000)
+                .defaultChainId("fireAlarm")
                 .capability(AiDecisionNode.DecisionService.class, new MockDecisionService())
                 .capability(AsyncSinkNode.SinkHandler.class, new MockSinkHandler())
                 .build();

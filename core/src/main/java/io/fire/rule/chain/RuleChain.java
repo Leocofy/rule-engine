@@ -2,12 +2,7 @@ package io.fire.rule.chain;
 
 import io.fire.rule.spi.RuleNode;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * 规则链：节点 + 命名关系构成的有向图。
@@ -22,11 +17,15 @@ public final class RuleChain {
 
     private final String id;
     private final String name;
-    private final Map<String, RuleNode> nodes = new LinkedHashMap<String, RuleNode>();
-    private final Map<String, String> nodeTypes = new LinkedHashMap<String, String>();
-    private final Map<String, Map<String, List<String>>> adjacency =
-            new HashMap<String, Map<String, List<String>>>();
-    private final List<String> entryNodes = new ArrayList<String>();
+    private final Map<String, RuleNode> nodes = new LinkedHashMap<>();
+    private final Map<String, String> nodeTypes = new LinkedHashMap<>();
+
+    /**
+     * fromNodeId -> (relation -> 下游节点列表)
+     */
+    private final Map<String, Map<String, List<String>>> adjacency = new HashMap<>();
+
+    private final List<String> entryNodes = new ArrayList<>();
 
     public RuleChain(String id, String name) {
         this.id = id;
@@ -41,22 +40,22 @@ public final class RuleChain {
         return name;
     }
 
-    public RuleChain addNode(String nodeId, String type, RuleNode node) {
+    public void addNode(String nodeId, String type, RuleNode node) {
         nodes.put(nodeId, node);
         nodeTypes.put(nodeId, type);
-        return this;
     }
 
-    /** 声明一条带关系名的边。同一关系可连多个下游，天然支持 fan-out。 */
-    public RuleChain connect(String fromNodeId, String relation, String toNodeId) {
-        Map<String, List<String>> rels = adjacency.computeIfAbsent(fromNodeId, k -> new HashMap<>());
-        rels.computeIfAbsent(relation, k -> new ArrayList<>()).add(toNodeId);
-        return this;
+    /**
+     * 声明一条带关系名的边。同一关系可连多个下游，天然支持 fan-out。
+     */
+    public void connect(String fromNodeId, String relation, String toNodeId) {
+        adjacency.computeIfAbsent(fromNodeId, k -> new HashMap<>())
+                .computeIfAbsent(relation, k -> new ArrayList<>())
+                .add(toNodeId);
     }
 
-    public RuleChain addEntry(String nodeId) {
+    public void addEntry(String nodeId) {
         entryNodes.add(nodeId);
-        return this;
     }
 
     public List<String> entryNodes() {
@@ -75,14 +74,17 @@ public final class RuleChain {
         return nodes.containsKey(nodeId);
     }
 
-    /** 查邻接表：找不到下游返回空列表。 */
+    /**
+     * 查邻接表：找不到下游返回空列表。
+     */
     public List<String> downstream(String nodeId, String relation) {
-        Map<String, List<String>> rels = adjacency.get(nodeId);
-        if (rels == null) {
-            return Collections.emptyList();
+        if (adjacency.containsKey(nodeId)) {
+            List<String> targets = adjacency.get(nodeId).get(relation);
+            if (targets != null) {
+                return Collections.unmodifiableList(targets);
+            }
         }
-        List<String> targets = rels.get(relation);
-        return targets == null ? Collections.<String>emptyList() : Collections.unmodifiableList(targets);
+        return Collections.emptyList();
     }
 
     public void destroy() {

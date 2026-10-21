@@ -8,10 +8,7 @@ import io.fire.rule.cluster.PartitionRouter;
 import io.fire.rule.config.JsonChainLoader;
 import io.fire.rule.model.RuleMessage;
 import io.fire.rule.observability.EngineObserver;
-import io.fire.rule.runtime.Envelope;
-import io.fire.rule.runtime.MessageSource;
-import io.fire.rule.runtime.PackProcessor;
-import io.fire.rule.runtime.RetryStrategy;
+import io.fire.rule.runtime.*;
 import io.fire.rule.runtime.dispatcher.KeyOrderedDispatcher;
 import io.fire.rule.runtime.dispatcher.TaskDispatcher;
 import io.fire.rule.runtime.strategy.BurstSubmitStrategy;
@@ -66,6 +63,10 @@ public class RuleEngine {
         this.observer = b.observer != null ? b.observer : EngineObserver.NOOP;
         this.asyncPool = b.asyncPool;
         this.dispatcher = b.dispatcher;
+
+        if (b.defaultChainId == null) {
+            throw new TaskExecuteException(RuleEngine.class, "defaultChainId 未设置");
+        }
 
         this.chainExecutor = ChainExecutor.builder()
                 .expressionEngine(b.expressionEngine)
@@ -161,11 +162,7 @@ public class RuleEngine {
     }
 
     public static NodeRegistry defaultRegistry() {
-        try {
-            return NodeRegistry.builder().build();
-        } catch (NodeException e) {
-            throw new RuntimeException(e);
-        }
+        return NodeRegistry.builder().build();
     }
 
     public static final class Builder {

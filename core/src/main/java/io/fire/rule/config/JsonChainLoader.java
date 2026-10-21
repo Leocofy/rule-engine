@@ -86,7 +86,7 @@ public final class JsonChainLoader {
                     String to = JsonUtil.asString(edge.get("to"));
                     String relation = JsonUtil.asString(edge.get("relation"));
                     if (relation == null || relation.isEmpty()) {
-                        relation = NodeDefinition.Relations.SUCCESS;
+                        relation = INodeContext.REL_SUCCESS;
                     }
                     if (to == null || !chain.hasNode(to)) {
                         throw new NodeException("边指向了不存在的节点: " + from + " -> " + to, true);

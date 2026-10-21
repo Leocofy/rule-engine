@@ -1,14 +1,12 @@
 package io.fire.rule.chain;
 
 import io.fire.rule.model.RuleMessage;
-import io.fire.rule.spi.*;
+import io.fire.rule.spi.IExpressionEngine;
+import io.fire.rule.spi.IMessageSink;
+import io.fire.rule.spi.INodeContext;
+import io.fire.rule.spi.NodeDefinition;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.Executor;
 
 /**
@@ -24,7 +22,7 @@ import java.util.concurrent.Executor;
 public class DefaultNodeContext implements INodeContext {
 
     private static final Set<String> SUCCESS_ONLY =
-            Collections.unmodifiableSet(new LinkedHashSet<>(Collections.singleton(NodeDefinition.Relations.SUCCESS)));
+            Collections.unmodifiableSet(new LinkedHashSet<>(Collections.singleton(REL_SUCCESS)));
 
     private final ChainExecutor executor;
     private final RuleChain chain;
@@ -35,10 +33,10 @@ public class DefaultNodeContext implements INodeContext {
     private final Map<Class<?>, Object> capabilities;
     private final ExecutionCallback callback;
 
-    public DefaultNodeContext(ChainExecutor executor, RuleChain chain, String nodeId,
-                              IExpressionEngine expressionEngine, Executor asyncExecutor,
-                              IMessageSink sink, Map<Class<?>, Object> capabilities,
-                              ExecutionCallback callback) {
+    private DefaultNodeContext(ChainExecutor executor, RuleChain chain, String nodeId,
+                               IExpressionEngine expressionEngine, Executor asyncExecutor,
+                               IMessageSink sink, Map<Class<?>, Object> capabilities,
+                               ExecutionCallback callback) {
         this.executor = executor;
         this.chain = chain;
         this.nodeId = nodeId;
@@ -51,7 +49,7 @@ public class DefaultNodeContext implements INodeContext {
 
     @Override
     public void tellSuccess(RuleMessage msg) {
-        tellNext(msg, NodeDefinition.Relations.SUCCESS);
+        tellNext(msg, REL_SUCCESS);
     }
 
     @Override
@@ -86,23 +84,21 @@ public class DefaultNodeContext implements INodeContext {
             }
             for (String target : targets) {
                 anyRouted = true;
-                executor.dispatch(chain, target, msg.transform()
-                        .chainId(chain.getId())
-                        .nodeId(target)
-                        .build(), callback);
+                executor.dispatch(chain, target,
+                        msg.transform().chainId(chain.getId()).nodeId(target).build(), callback);
             }
         }
 
         // 没有任何下游接住这条关系 → 走到链路尽头。
         // 若当前处于嵌套链中，必须回跳到调用者链，否则子链结果会被静默吞掉。
         if (!anyRouted) {
-            output(msg, NodeDefinition.Relations.SUCCESS);
+            output(msg, REL_SUCCESS);
         }
     }
 
     @Override
     public void tellFailure(RuleMessage msg, Throwable t) {
-        List<String> targets = chain.downstream(nodeId, NodeDefinition.Relations.FAILURE);
+        List<String> targets = chain.downstream(nodeId, REL_FAILURE);
         if (targets.isEmpty()) {
             // Failure 无人接管 → 整条消息判失败
             if (callback != null) {
@@ -128,7 +124,9 @@ public class DefaultNodeContext implements INodeContext {
         enqueueForTellNext(msg, Collections.singleton(relationType));
     }
 
-    /** 跨节点投递：关系名随消息一起序列化，消费端据此继续路由。 */
+    /**
+     * 跨节点投递：关系名随消息一起序列化，消费端据此继续路由。
+     */
     public void enqueueForTellNext(RuleMessage msg, Set<String> relationTypes) {
         if (!msg.isValid()) {
             return;
@@ -165,7 +163,7 @@ public class DefaultNodeContext implements INodeContext {
 
     @Override
     public void output(RuleMessage msg, String relationType) {
-        outputRecursive(msg, relationType == null ? NodeDefinition.Relations.SUCCESS : relationType);
+        outputRecursive(msg, relationType == null ? REL_SUCCESS : relationType);
     }
 
     /**
@@ -243,5 +241,69 @@ public class DefaultNodeContext implements INodeContext {
     @Override
     public String getNodeId() {
         return nodeId;
+    }
+
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    public static class Builder {
+        private ChainExecutor executor;
+        private RuleChain chain;
+        private String nodeId;
+        private IExpressionEngine expressionEngine;
+        private Executor asyncExecutor;
+        private IMessageSink sink;
+        private Map<Class<?>, Object> capabilities;
+        private ExecutionCallback callback;
+
+        public Builder executor(ChainExecutor executor) {
+            this.executor = executor;
+            return this;
+        }
+
+        public Builder chain(RuleChain chain) {
+            this.chain = chain;
+            return this;
+        }
+
+        public Builder nodeId(String nodeId) {
+            this.nodeId = nodeId;
+            return this;
+        }
+
+        public Builder expressionEngine(IExpressionEngine expressionEngine) {
+            this.expressionEngine = expressionEngine;
+            return this;
+        }
+
+        public Builder asyncExecutor(Executor asyncExecutor) {
+            this.asyncExecutor = asyncExecutor;
+            return this;
+        }
+
+        public Builder sink(IMessageSink sink) {
+            this.sink = sink;
+            return this;
+        }
+
+        public Builder capabilities(Class<?> clazz, Object capabilities) {
+            this.capabilities.put(clazz, capabilities);
+            return this;
+        }
+
+        public Builder capabilities(Map<Class<?>, Object> capabilities) {
+            this.capabilities = capabilities;
+            return this;
+        }
+
+        public Builder callback(ExecutionCallback callback) {
+            this.callback = callback;
+            return this;
+        }
+
+        public DefaultNodeContext build() {
+            return new DefaultNodeContext(executor, chain, nodeId, expressionEngine, asyncExecutor, sink, capabilities, callback);
+        }
     }
 }
