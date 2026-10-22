@@ -1,0 +1,16 @@
+rule:
+  engine:
+    enabled: true
+    default-chain-id: fireAlarm
+    chain-config-path: fire-alarm-chain.json
+    poll-size: 64
+    pack-timeout-ms: 10000
+    auto-start: true
+    expression-engine: aviator
+
+example:
+  enabled: false
+
+logging:
+  level:
+    io.fire: warn

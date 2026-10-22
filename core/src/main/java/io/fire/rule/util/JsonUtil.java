@@ -30,6 +30,15 @@ public final class JsonUtil {
 
     private static final ObjectMapper om = new ObjectMapper();
 
+    public static String toJsonString(Object o) {
+        try {
+            return om.writeValueAsString(o);
+        } catch (JsonProcessingException e) {
+            LOG.error("JSON 序列化失败 [{}]: ", o, e);
+            throw new TaskExecuteException("Invalid JSON data", e);
+        }
+    }
+
     @SuppressWarnings("unchecked")
     public static Map<String, Object> parseObject(String json) {
         try {

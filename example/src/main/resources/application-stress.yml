@@ -1,0 +1,27 @@
+# 压测专用 Profile：java -jar example/target/rule-engine-example-1.0.0.jar --spring.profiles.active=stress
+# 关闭模拟网关流量，只保留 HTTP 回调入口；日志降噪，避免完整 payload 打印成为瓶颈。
+rule:
+  engine:
+    poll-size: 64
+    pack-timeout-ms: 20000
+    auto-start: true
+
+example:
+  enabled: false
+  stress:
+    enabled: true
+    # 0 表示按 CPU 自动计算 max(4, cores * 2)
+    lane-count: 0
+    lane-queue-capacity: 4096
+    async-pool-size: 0
+    async-queue-capacity: 4096
+
+server:
+  tomcat:
+    threads:
+      max: 400
+    accept-count: 1000
+
+logging:
+  level:
+    io.fire: warn

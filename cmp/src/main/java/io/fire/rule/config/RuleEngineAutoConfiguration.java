@@ -2,7 +2,9 @@ package io.fire.rule.config;
 
 import io.fire.rule.RuleEngine;
 import io.fire.rule.expression.AviatorExpressionEngine;
+import io.fire.rule.nodes.LogNode;
 import io.fire.rule.nodes.SimpleExpressionEngine;
+import io.fire.rule.nodes.TransformNode;
 import io.fire.rule.observability.EngineObserver;
 import io.fire.rule.runtime.InMemoryMessageSource;
 import io.fire.rule.runtime.MessageSource;
@@ -53,6 +55,16 @@ import java.util.Map;
 public class RuleEngineAutoConfiguration {
 
     @Bean
+    public LogNode logNode() {
+        return new LogNode();
+    }
+
+    @Bean
+    public TransformNode transformNode() {
+        return new TransformNode();
+    }
+
+    @Bean
     @ConditionalOnMissingBean(INodeRegistry.class)
     public SpringNodeRegistry springNodeRegistry() {
         return new SpringNodeRegistry();
@@ -96,11 +108,6 @@ public class RuleEngineAutoConfiguration {
             RuleEngineProperties props,
             ObjectProvider<RuleEngineCustomizer> customizerProvider) throws NodeException {
 
-        NodeRegistry registry = NodeRegistry.builder()
-                .autoDiscover(true)
-                .registry(nodeRegistry)
-                .build();
-
         String chainJson = null;
         String defaultChainId = props.getDefaultChainId();
         if (props.getChainConfigPath() != null) {
@@ -112,7 +119,7 @@ public class RuleEngineAutoConfiguration {
         }
 
         RuleEngine.Builder builder = RuleEngine.builder()
-                .registry(registry)
+                .registry(nodeRegistry)
                 .expressionEngine(expressionEngine)
                 .source(messageSource)
                 .observer(engineObserver)

@@ -14,7 +14,9 @@ public final class ProcessingDecision {
     public static int FAILURE_RATE_EXCEEDED = 2;
     // 超时且策略未配置重投超时项
     public static int TIMEOUT = 3;
-    // 引擎关闭/线程中断
+    /**
+     * 引擎关闭/线程中断
+     */
     public static int INTERRUPTED = 4;
 
     private static final ProcessingDecision COMMIT = new ProcessingDecision(true, Collections.emptyMap());

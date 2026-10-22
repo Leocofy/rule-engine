@@ -2,13 +2,11 @@ package io.fire.rule.example.node;
 
 import io.fire.rule.model.RuleMessage;
 import io.fire.rule.spi.INodeContext;
-import io.fire.rule.spi.NodeComponent;
+import io.fire.rule.config.NodeComponent;
 import io.fire.rule.spi.NodeConfig;
 import io.fire.rule.spi.NodeException;
 import io.fire.rule.spi.RuleNode;
-
-import java.util.Collections;
-import java.util.Set;
+import org.springframework.stereotype.Component;
 
 /**
  * AI 判定节点：把智能体的结论直接当作关系名输出。
@@ -29,11 +27,17 @@ public class AiDecisionNode implements RuleNode {
     }
 
     private String agent;
-    private Set<String> fallbackRelations = Collections.singleton("Success");
+    private long latencyMs = 200L;
 
     @Override
     public void init(INodeContext ctx, NodeConfig config) throws NodeException {
         this.agent = config.getOrDefault("agent", "default");
+        this.latencyMs = config.getInt("latencyMs", 200);
+        // 压测开关：-Dexample.ai.latency-ms=0 可去掉模拟耗时，用于测引擎本身的上限
+        String override = System.getProperty("example.ai.latency-ms");
+        if (override != null && !override.trim().isEmpty()) {
+            this.latencyMs = Long.parseLong(override.trim());
+        }
     }
 
     @Override
@@ -48,9 +52,12 @@ public class AiDecisionNode implements RuleNode {
                 if (!msg.isValid()) {
                     return;
                 }
+                if (latencyMs > 0) {
+                    Thread.sleep(latencyMs);
+                }
                 String relation = service.decide(agent, msg);
                 if (relation == null || relation.isEmpty()) {
-                    ctx.tellNext(msg, fallbackRelations);
+                    ctx.tellSuccess(msg);
                     return;
                 }
                 ctx.tellNext(msg, relation);

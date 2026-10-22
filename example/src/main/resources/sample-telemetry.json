@@ -1,0 +1,59 @@
+{
+  "traceId": "trace-20261022-1001-demo",
+  "event": {
+    "eventId": "evt-demo-1001",
+    "type": "DEVICE_TELEMETRY",
+    "source": "EDGE_GATEWAY",
+    "reportedAt": "2026-10-22T10:15:30.512+08:00",
+    "reportedBy": "edge-agent-01",
+    "priority": "CRITICAL",
+    "siteCode": "A-3"
+  },
+  "device": {
+    "deviceId": "smoke-A3-021",
+    "deviceType": "SMOKE_DETECTOR",
+    "vendor": {
+      "code": "HIKVISION",
+      "model": "NP-V3",
+      "firmware": "2.4.1"
+    },
+    "location": {
+      "site": "北京亦庄仓储中心",
+      "building": "A",
+      "floor": 3,
+      "zone": "危化品存储区",
+      "coordinate": { "lat": 39.795, "lng": 116.506 }
+    },
+    "status": {
+      "online": true,
+      "battery": 76,
+      "signal": -63,
+      "lastHeartbeat": "2026-10-22T10:15:28.114+08:00"
+    },
+    "installedAt": "2024-06-18"
+  },
+  "telemetry": {
+    "temperature": 118.4,
+    "humidity": 21.7,
+    "smokeDensity": 1.12,
+    "coLevel": 68.5,
+    "vibration": 0.28
+  },
+  "threshold": {
+    "temperature": 80.0,
+    "smokeDensity": 0.5,
+    "coLevel": 24.0
+  },
+  "recentWindow": [
+    { "ts": "2026-10-22T10:13:30.512+08:00", "temperature": 85.3, "smokeDensity": 0.56 },
+    { "ts": "2026-10-22T10:14:30.512+08:00", "temperature": 103.0, "smokeDensity": 0.83 },
+    { "ts": "2026-10-22T10:15:30.512+08:00", "temperature": 118.4, "smokeDensity": 1.12 }
+  ],
+  "tags": ["warehouse", "hazmat", "priority-site"],
+  "ext": {
+    "gatewayVersion": "3.2.0",
+    "protocol": "MQTT",
+    "qos": 1,
+    "sequence": 582131
+  }
+}

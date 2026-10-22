@@ -11,9 +11,7 @@ import io.fire.rule.spi.IExpressionEngine;
  * {@link IExpressionEngine} 后，这个节点就具备"配置化映射任意厂商设备数据"的能力，
  * 新增设备类型无需改代码。
  */
-@NodeComponent(type = "transform", category = "transformation",
-        description = "转换消息负载与元数据")
-public class TransformNode implements RuleNode {
+public class TransformNode implements RuleNodeDefinition {
 
     private String expr;
 
@@ -30,5 +28,40 @@ public class TransformNode implements RuleNode {
                 .copyMetaData(msg.getMetaData())
                 .build();
         ctx.tellSuccess(next);
+    }
+
+    @Override
+    public String type() {
+        return "transform";
+    }
+
+    @Override
+    public String title() {
+        return "消息转换";
+    }
+
+    @Override
+    public String category() {
+        return "transformation";
+    }
+
+    @Override
+    public String description() {
+        return "转换消息负载与元数据";
+    }
+
+    @Override
+    public String[] relations() {
+        return new String[0];
+    }
+
+    @Override
+    public boolean customRelations() {
+        return false;
+    }
+
+    @Override
+    public String version() {
+        return "1.0";
     }
 }

@@ -1,39 +1,50 @@
 {
   "id": "fireAlarm",
-  "name": "消防告警处理链",
+  "name": "消防隐患智能处置链",
   "nodes": {
     "recv": {
       "type": "log",
       "props": { "prefix": "[INPUT]" }
     },
+    "validate": {
+      "type": "deviceValidate"
+    },
     "riskFilter": {
       "type": "filter",
-      "props": { "expr": "temp > 80" }
+      "props": {
+        "expr": "telemetry.temperature > threshold.temperature || telemetry.smokeDensity > threshold.smokeDensity || telemetry.coLevel > threshold.coLevel"
+      }
     },
     "enrich": {
-      "type": "transform",
-      "props": { "expr": "set:level=critical;tempF=$[temp]" }
+      "type": "riskEnrich",
+      "props": { "criticalScore": "80", "warnScore": "50" }
     },
     "aiJudge": {
       "type": "aiDecision",
-      "props": { "agent": "riskJudge" }
+      "props": { "agent": "riskJudge", "latencyMs": "200" }
+    },
+    "notify": {
+      "type": "notify"
     },
     "persist": {
       "type": "asyncSink",
       "props": { "target": "tdengine" }
     },
-    "discard": {
-      "type": "log",
-      "props": { "prefix": "[LOG]" }
+    "archive": {
+      "type": "archive"
     }
   },
   "edges": {
-    "recv":       [ { "to": "riskFilter" } ],
+    "recv":       [ { "to": "validate" } ],
+    "validate":   [ { "to": "riskFilter", "relation": "Valid" },
+                    { "to": "archive", "relation": "Invalid" } ],
     "riskFilter": [ { "to": "enrich", "relation": "True" },
-                    { "to": "discard", "relation": "False" } ],
+                    { "to": "archive", "relation": "False" } ],
     "enrich":     [ { "to": "aiJudge" } ],
-    "aiJudge":    [ { "to": "persist", "relation": "有隐患" },
-                    { "to": "discard", "relation": "无隐患" } ]
+    "aiJudge":    [ { "to": "notify", "relation": "立即处置" },
+                    { "to": "persist", "relation": "持续观察" },
+                    { "to": "archive", "relation": "无需处置" } ],
+    "notify":     [ { "to": "persist" } ]
   },
   "entry": [ "recv" ]
 }

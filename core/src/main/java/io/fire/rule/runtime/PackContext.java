@@ -54,7 +54,10 @@ public class PackContext {
     public PackContext(String queueName, SubmitStrategy submitStrategy) {
         this.queueName = queueName;
         this.submitStrategy = submitStrategy;
-        this.pending = submitStrategy.pendingMap();
+        // 不能直接持有策略内部的 pending map：它可能是 LinkedHashMap，
+        // 而批次回调由多个 lane 线程并发执行 remove，非线程安全容器会偶发丢元素，
+        // 表现为 pendingCount 已归零但 pending 仍有残留，最终被误判为超时死信。
+        this.pending = new ConcurrentHashMap<>(submitStrategy.pendingMap());
         this.pendingCount = new AtomicInteger(pending.size());
     }
 

@@ -2,6 +2,7 @@ package io.fire.rule.config;
 
 import io.fire.rule.spi.*;
 import org.springframework.beans.BeansException;
+import org.springframework.beans.factory.BeanCreationNotAllowedException;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 
@@ -25,7 +26,7 @@ public class SpringNodeRegistry implements INodeRegistry, ApplicationContextAwar
     private final Map<String, NodeDefinition> definitions = new HashMap<>(16);
 
     @Override
-    public RuleNode get(String type) throws NodeException {
+    public RuleNode get(String type) {
         return ruleNodes.get(type);
     }
 
@@ -52,13 +53,30 @@ public class SpringNodeRegistry implements INodeRegistry, ApplicationContextAwar
     @Override
     public void setApplicationContext(ApplicationContext context) throws BeansException {
         Map<String, RuleNode> beans = context.getBeansOfType(RuleNode.class);
-        for (RuleNode node : beans.values()) {
-            NodeComponent cmp = node.getClass().getAnnotation(NodeComponent.class);
-            if (cmp == null) {
-                continue;
+        beans.forEach((name, node) -> {
+            NodeDefinition def;
+            if (node instanceof RuleNodeDefinition) {
+                def = new NodeDefinition((RuleNodeDefinition) node);
+            } else {
+                NodeComponent cmp = node.getClass().getAnnotation(NodeComponent.class);
+                if (cmp == null) {
+                    throw new BeanCreationNotAllowedException(name, "Missing @NodeComponent annotation");
+                }
+                def = NodeDefinition.builder()
+                        .type(cmp.type())
+                        .title(cmp.title())
+                        .description(cmp.description())
+                        .category(cmp.category())
+                        .version(cmp.version())
+                        .relations(cmp.relations())
+                        .customRelations(cmp.customRelations())
+                        .build();
             }
-            ruleNodes.put(cmp.type(), node);
-            definitions.put(cmp.type(), new NodeDefinition(cmp));
-        }
+            if (ruleNodes.containsKey(def.getType())) {
+                throw new BeanCreationNotAllowedException(name, "Duplicate node type: " + def.getType());
+            }
+            ruleNodes.put(def.getType(), node);
+            definitions.put(def.getType(), def);
+        });
     }
 }

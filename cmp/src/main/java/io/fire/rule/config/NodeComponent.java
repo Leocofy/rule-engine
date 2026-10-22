@@ -1,4 +1,6 @@
-package io.fire.rule.spi;
+package io.fire.rule.config;
+
+import org.springframework.stereotype.Component;
 
 import java.lang.annotation.*;
 
@@ -11,13 +13,14 @@ import java.lang.annotation.*;
  * <p><b>customRelations=true</b> 表示输出关系由运行时决定（如 AI 判定节点），
  * 配置期无法确定，引擎不会校验其下游连线。
  */
-@Documented
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.TYPE)
+@Component
+@Documented
 public @interface NodeComponent {
 
     /**
-     * 节点类型标识，规则链 JSON 中引用，如 "jsonata-transform"。
+     * 节点类型标识，规则链 JSON 中引用
      */
     String type();
 
@@ -49,5 +52,5 @@ public @interface NodeComponent {
     /**
      * 当前配置版本号，用于 upgrade 迁移。
      */
-    String version() default "1";
+    String version() default "1.0";
 }

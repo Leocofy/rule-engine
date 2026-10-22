@@ -2,8 +2,11 @@ package io.fire.rule.spi;
 
 import io.fire.rule.runtime.TaskExecuteException;
 
-import java.util.*;
+import java.util.Collection;
+import java.util.Map;
+import java.util.ServiceLoader;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 /**
  * 节点注册中心：type -> 实现类。
@@ -16,63 +19,26 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class NodeRegistry implements INodeRegistry {
 
-    private static final INodeRegistry NOOP = new INodeRegistry() {
-        @Override
-        public NodeDefinition definition(String type) {
-            return null;
-        }
-
-        @Override
-        public Collection<NodeDefinition> definitions() {
-            return Collections.emptySet();
-        }
-
-        @Override
-        public RuleNode get(String type) {
-            return null;
-        }
-
-        @Override
-        public <T> T get(String type, Class<T> requireClazz) {
-            return null;
-        }
-    };
-
-    private final Map<String, NodeDefinition> DEFINITIONS = new ConcurrentHashMap<>(12);
-
     /**
      * 一级缓存，节点类型 -> 节点
      */
-    private final Map<String, RuleNode> NODES = new ConcurrentHashMap<>(12);
-
-    /**
-     * 用于 spring 集成，将 spi 注册的节点也纳入 spring 管理
-     */
-    private final INodeRegistry registry;
+    private final Map<String, RuleNodeDefinition> NODES = new ConcurrentHashMap<>(12);
 
     private NodeRegistry(Builder builder) throws NodeException {
-        this.registry = builder.registry;
-
         if (builder.autoDiscover) {
             discover();
         }
 
-        for (RuleNode node : builder.nodes.values()) {
+        for (RuleNodeDefinition node : builder.nodes.values()) {
             register(node);
         }
     }
 
-    private void register(RuleNode node) throws NodeException {
-        Class<? extends RuleNode> clazz = node.getClass();
-        NodeComponent def = clazz.getAnnotation(NodeComponent.class);
-        if (def == null) {
-            throw new NodeException("节点缺少 @NodeComponent 注解: " + clazz.getName(), true);
+    private void register(RuleNodeDefinition node) throws NodeException {
+        if (NODES.containsKey(node.type())) {
+            throw new NodeException("节点类型重复注册: " + node.type(), true);
         }
-        if (NODES.containsKey(def.type())) {
-            throw new NodeException("节点类型重复注册: " + def.type(), true);
-        }
-        NODES.put(def.type(), node);
-        DEFINITIONS.put(def.type(), new NodeDefinition(def));
+        NODES.put(node.type(), node);
     }
 
     /**
@@ -80,8 +46,8 @@ public final class NodeRegistry implements INodeRegistry {
      */
     private int discover() throws NodeException {
         int count = 0;
-        ServiceLoader<RuleNode> loader = ServiceLoader.load(RuleNode.class);
-        for (RuleNode node : loader) {
+        ServiceLoader<RuleNodeDefinition> loader = ServiceLoader.load(RuleNodeDefinition.class);
+        for (RuleNodeDefinition node : loader) {
             register(node);
             count++;
         }
@@ -98,11 +64,7 @@ public final class NodeRegistry implements INodeRegistry {
 
     @Override
     public NodeDefinition definition(String type) {
-        NodeDefinition definition = registry.definition(type);
-        if (definition == null) {
-            definition = DEFINITIONS.get(type);
-        }
-        return definition;
+        return NODES.containsKey(type) ? new NodeDefinition(NODES.get(type)) : null;
     }
 
     /**
@@ -110,27 +72,22 @@ public final class NodeRegistry implements INodeRegistry {
      */
     @Override
     public Collection<NodeDefinition> definitions() {
-        Collection<NodeDefinition> def = registry.definitions();
-        List<NodeDefinition> definitions = new ArrayList<>(def.size() + DEFINITIONS.size());
-        definitions.addAll(def);
-        definitions.addAll(DEFINITIONS.values());
-        return Collections.unmodifiableCollection(definitions);
+        return NODES.values().stream().map(NodeDefinition::new).collect(Collectors.toList());
     }
 
     @Override
     public RuleNode get(String type) throws NodeException {
-        RuleNode ruleNode = registry.get(type);
-        if (ruleNode != null)
-            return ruleNode;
-        else return getNode(type);
+        return getNode(type);
     }
 
     @Override
     @SuppressWarnings("unchecked")
     public <T> T get(String type, Class<T> requireClazz) throws NodeException {
-        T node = registry.get(type, requireClazz);
-        if (node != null) return node;
-        return (T) getNode(type);
+        RuleNode node = getNode(type);
+        if (requireClazz.isInstance(node)) {
+            return (T) node;
+        }
+        throw new NodeException("Node type mismatch: " + type + " expected: " + requireClazz.getName() + " actual: " + node.getClass().getName(), true);
     }
 
     public static Builder builder() {
@@ -142,8 +99,7 @@ public final class NodeRegistry implements INodeRegistry {
     }
 
     public static class Builder {
-        private INodeRegistry registry = NOOP;
-        private final Map<Class<? extends RuleNode>, RuleNode> nodes = new ConcurrentHashMap<>();
+        private final Map<Class<? extends RuleNodeDefinition>, RuleNodeDefinition> nodes = new ConcurrentHashMap<>();
         private boolean autoDiscover = false;
 
         public Builder autoDiscover(boolean autoDiscover) {
@@ -151,14 +107,14 @@ public final class NodeRegistry implements INodeRegistry {
             return this;
         }
 
-        public Builder register(RuleNode node) {
+        public Builder register(RuleNodeDefinition node) {
             this.nodes.put(node.getClass(), node);
             return this;
         }
 
-        public Builder register(Class<? extends RuleNode> nodeClazz, Object... args) throws NodeException {
+        public Builder register(Class<? extends RuleNodeDefinition> nodeClazz, Object... args) throws TaskExecuteException {
             try {
-                RuleNode node;
+                RuleNodeDefinition node;
                 if (args == null || args.length == 0) {
                     node = nodeClazz.getDeclaredConstructor().newInstance();
                 } else {
@@ -171,13 +127,8 @@ public final class NodeRegistry implements INodeRegistry {
 
                 this.nodes.put(node.getClass(), node);
             } catch (Exception e) {
-                throw new NodeException("Failed to instantiate " + nodeClazz, e);
+                throw new TaskExecuteException("Failed to instantiate " + nodeClazz, e);
             }
-            return this;
-        }
-
-        public Builder registry(INodeRegistry registry) {
-            this.registry = registry;
             return this;
         }
 

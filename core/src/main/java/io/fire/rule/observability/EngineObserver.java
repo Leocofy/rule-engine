@@ -85,14 +85,17 @@ public interface EngineObserver {
 
         @Override
         public void onPackTimeout(String queueName, int pendingCount) {
+            System.out.println("Pack timeout: " + queueName + " pendingCount=" + pendingCount);
         }
 
         @Override
         public void onPackFailed(String queueName, int failedCount, List<String> samples) {
+            System.out.println("Pack failed: " + queueName + " failedCount=" + failedCount + " samples=" + samples);
         }
 
         @Override
         public void onPackFinished(String queueName, int total, boolean committed) {
+            System.out.println("Pack finished: " + queueName + " total=" + total + " committed=" + committed);
         }
 
         @Override

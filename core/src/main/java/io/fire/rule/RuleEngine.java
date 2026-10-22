@@ -3,6 +3,7 @@ package io.fire.rule;
 import io.fire.rule.chain.ChainExecutor;
 import io.fire.rule.chain.RuleChain;
 import io.fire.rule.cluster.DistributedIMessageSink;
+import io.fire.rule.cluster.JsonMessageSerializer;
 import io.fire.rule.cluster.MessageSerializer;
 import io.fire.rule.cluster.PartitionRouter;
 import io.fire.rule.config.JsonChainLoader;
@@ -92,8 +93,7 @@ public class RuleEngine {
 
         // 分布式装配：配置了分区路由器时，自动构造投递器并注入（解决循环依赖）
         if (b.partitionRouter != null && b.remoteTransport != null) {
-            io.fire.rule.cluster.MessageSerializer ser = b.messageSerializer != null
-                    ? b.messageSerializer : new io.fire.rule.cluster.JsonMessageSerializer();
+            MessageSerializer ser = b.messageSerializer != null ? b.messageSerializer : new JsonMessageSerializer();
             DistributedIMessageSink distSink =
                     new DistributedIMessageSink(
                             b.partitionRouter, ser, b.remoteTransport, chainExecutor);
@@ -161,12 +161,8 @@ public class RuleEngine {
         return new Builder();
     }
 
-    public static NodeRegistry defaultRegistry() {
-        return NodeRegistry.builder().build();
-    }
-
     public static final class Builder {
-        private NodeRegistry registry = NodeRegistry.defaultRegistry();
+        private INodeRegistry registry = NodeRegistry.defaultRegistry();
         private IExpressionEngine expressionEngine;
         private MessageSource source;
         private IMessageSink sink;
@@ -194,7 +190,7 @@ public class RuleEngine {
             return this;
         }
 
-        public Builder registry(NodeRegistry registry) {
+        public Builder registry(INodeRegistry registry) {
             this.registry = registry;
             return this;
         }

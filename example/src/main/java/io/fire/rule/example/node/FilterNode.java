@@ -3,10 +3,11 @@ package io.fire.rule.example.node;
 import io.fire.rule.model.RuleMessage;
 import io.fire.rule.spi.IExpressionEngine;
 import io.fire.rule.spi.INodeContext;
-import io.fire.rule.spi.NodeComponent;
+import io.fire.rule.config.NodeComponent;
 import io.fire.rule.spi.NodeConfig;
 import io.fire.rule.spi.NodeException;
 import io.fire.rule.spi.RuleNode;
+import org.springframework.stereotype.Component;
 
 /**
  * 过滤节点：按条件把消息分到 True / False 两条关系。

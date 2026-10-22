@@ -77,6 +77,19 @@ public class KeyOrderedDispatcher implements TaskDispatcher {
     }
 
     /**
+     * 各通道当前排队任务数，用于压测与监控定位积压通道。
+     *
+     * <p>只读快照，不保证同一时刻的一致性。
+     */
+    public int[] queueSizes() {
+        int[] sizes = new int[laneCount];
+        for (int i = 0; i < laneCount; i++) {
+            sizes[i] = ((ThreadPoolExecutor) lanes[i]).getQueue().size();
+        }
+        return sizes;
+    }
+
+    /**
      * 借鉴 ConcurrentHashMap 的扰动函数，避免低位规律性导致的倾斜。
      */
     private static int spread(int h) {
