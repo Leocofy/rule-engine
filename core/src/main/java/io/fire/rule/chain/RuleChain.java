@@ -1,5 +1,6 @@
 package io.fire.rule.chain;
 
+import io.fire.rule.spi.NodeConfig;
 import io.fire.rule.spi.RuleNode;
 
 import java.util.*;
@@ -19,6 +20,7 @@ public final class RuleChain {
     private final String name;
     private final Map<String, RuleNode> nodes = new LinkedHashMap<>();
     private final Map<String, String> nodeTypes = new LinkedHashMap<>();
+    private final Map<String, NodeConfig> nodeConfigs = new HashMap<>();
 
     /**
      * fromNodeId -> (relation -> 下游节点列表)
@@ -40,9 +42,14 @@ public final class RuleChain {
         return name;
     }
 
-    public void addNode(String nodeId, String type, RuleNode node) {
+    public void addNode(String nodeId, String type, RuleNode node, NodeConfig config) {
         nodes.put(nodeId, node);
         nodeTypes.put(nodeId, type);
+        nodeConfigs.put(nodeId, config != null ? config : NodeConfig.EMPTY);
+    }
+
+    public NodeConfig nodeConfig(String nodeId) {
+        return nodeConfigs.getOrDefault(nodeId, NodeConfig.EMPTY);
     }
 
     /**
@@ -85,11 +92,5 @@ public final class RuleChain {
             }
         }
         return Collections.emptyList();
-    }
-
-    public void destroy() {
-        for (RuleNode node : nodes.values()) {
-            node.destroy();
-        }
     }
 }

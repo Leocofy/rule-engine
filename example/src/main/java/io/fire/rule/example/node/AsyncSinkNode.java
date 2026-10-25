@@ -3,8 +3,6 @@ package io.fire.rule.example.node;
 import io.fire.rule.model.RuleMessage;
 import io.fire.rule.spi.INodeContext;
 import io.fire.rule.config.NodeComponent;
-import io.fire.rule.spi.NodeConfig;
-import io.fire.rule.spi.NodeException;
 import io.fire.rule.spi.RuleNode;
 import org.springframework.stereotype.Component;
 
@@ -29,13 +27,6 @@ public class AsyncSinkNode implements RuleNode {
         void handle(String target, RuleMessage msg) throws Exception;
     }
 
-    private String target;
-
-    @Override
-    public void init(INodeContext ctx, NodeConfig config) throws NodeException {
-        this.target = config.getOrDefault("target", "default");
-    }
-
     @Override
     public void onMsg(final INodeContext ctx, final RuleMessage msg) throws Exception {
         final SinkHandler handler = ctx.capability(SinkHandler.class);
@@ -43,6 +34,7 @@ public class AsyncSinkNode implements RuleNode {
             ctx.tellFailure(msg, new IllegalStateException("未注入 SinkHandler"));
             return;
         }
+        final String target = ctx.nodeConfig().getString("target", "default");
         ctx.asyncExecutor().execute(() -> {
             try {
                 handler.handle(target, msg);

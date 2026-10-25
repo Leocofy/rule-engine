@@ -3,8 +3,6 @@ package io.fire.rule.example.node;
 import io.fire.rule.config.NodeComponent;
 import io.fire.rule.model.RuleMessage;
 import io.fire.rule.spi.INodeContext;
-import io.fire.rule.spi.NodeConfig;
-import io.fire.rule.spi.NodeException;
 import io.fire.rule.spi.RuleNode;
 
 /**
@@ -21,11 +19,6 @@ import io.fire.rule.spi.RuleNode;
 public class ArchiveNode implements RuleNode {
 
     private static final String TARGET = "archive";
-
-    @Override
-    public void init(INodeContext ctx, NodeConfig config) throws NodeException {
-        // 归档路径由 SinkHandler 内部决定，节点不感知存储介质
-    }
 
     @Override
     public void onMsg(INodeContext ctx, RuleMessage msg) throws Exception {

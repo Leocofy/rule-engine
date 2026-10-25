@@ -12,43 +12,54 @@ import java.util.Map;
  */
 public final class NodeConfig {
 
-    public static final NodeConfig EMPTY = new NodeConfig(Collections.<String, String>emptyMap());
+    public static final NodeConfig EMPTY = new NodeConfig(Collections.emptyMap());
 
-    private final Map<String, String> props;
+    private final Map<String, Object> props;
 
-    public NodeConfig(Map<String, String> props) {
+    public NodeConfig(Map<String, Object> props) {
         this.props = props == null
-                ? new LinkedHashMap<String, String>()
-                : new LinkedHashMap<String, String>(props);
+                ? new LinkedHashMap<>()
+                : new LinkedHashMap<>(props);
     }
 
-    public String get(String key) {
+    public Object get(String key) {
         return props.get(key);
     }
 
-    public String getOrDefault(String key, String def) {
-        String v = props.get(key);
-        return v == null ? def : v;
+    public String getString(String key) {
+        Object v = props.get(key);
+        return v == null ? null : String.valueOf(v);
+    }
+
+    public String getString(String key, String def) {
+        Object v = props.get(key);
+        return v == null ? def : String.valueOf(v);
+    }
+
+    @SuppressWarnings("unchecked")
+    public <T> T getOrDefault(String key, T def) {
+        Object v = props.get(key);
+        return v == null ? def : (T) v;
     }
 
     public int getInt(String key, int def) {
-        String v = props.get(key);
+        Object v = props.get(key);
         if (v == null) {
             return def;
         }
         try {
-            return Integer.parseInt(v.trim());
+            return Integer.parseInt(v.toString().trim());
         } catch (NumberFormatException e) {
             return def;
         }
     }
 
     public boolean getBool(String key, boolean def) {
-        String v = props.get(key);
-        return v == null ? def : Boolean.parseBoolean(v.trim());
+        Object v = props.get(key);
+        return v == null ? def : Boolean.parseBoolean(v.toString().trim());
     }
 
-    public Map<String, String> props() {
+    public Map<String, Object> props() {
         return Collections.unmodifiableMap(props);
     }
 }

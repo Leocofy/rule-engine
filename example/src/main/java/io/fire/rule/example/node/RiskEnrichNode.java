@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.fire.rule.config.NodeComponent;
 import io.fire.rule.model.RuleMessage;
 import io.fire.rule.spi.INodeContext;
-import io.fire.rule.spi.NodeConfig;
 import io.fire.rule.spi.NodeException;
 import io.fire.rule.spi.RuleNode;
 import org.slf4j.Logger;
@@ -49,21 +48,15 @@ public class RiskEnrichNode implements RuleNode {
 
     private final ObjectMapper objectMapper;
 
-    private double criticalScore = 80d;
-    private double warnScore = 50d;
-
     public RiskEnrichNode(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
     }
 
     @Override
-    public void init(INodeContext ctx, NodeConfig config) throws NodeException {
-        this.criticalScore = toDouble(config.get("criticalScore"), 80d);
-        this.warnScore = toDouble(config.get("warnScore"), 50d);
-    }
-
-    @Override
     public void onMsg(INodeContext ctx, RuleMessage msg) throws Exception {
+        double criticalScore = toDouble(ctx.nodeConfig().getString("criticalScore"), 80d);
+        double warnScore = toDouble(ctx.nodeConfig().getString("warnScore"), 50d);
+
         Map<String, Object> root;
         try {
             root = objectMapper.readValue(msg.getPayload(), new TypeReference<Map<String, Object>>() {
@@ -97,7 +90,7 @@ public class RiskEnrichNode implements RuleNode {
         double batteryScore = battery < 20 ? 5d : 0d;
 
         double score = Math.min(100d, tempScore + smokeScore + coScore + trend.score + batteryScore);
-        String level = level(score);
+        String level = level(score, criticalScore, warnScore);
 
         List<String> factors = new ArrayList<>();
         if (tempRatio > 1d) {
@@ -173,7 +166,7 @@ public class RiskEnrichNode implements RuleNode {
         return trend;
     }
 
-    private String level(double score) {
+    private String level(double score, double criticalScore, double warnScore) {
         if (score >= criticalScore) {
             return "CRITICAL";
         }

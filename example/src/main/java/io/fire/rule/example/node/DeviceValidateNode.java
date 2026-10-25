@@ -5,8 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.fire.rule.config.NodeComponent;
 import io.fire.rule.model.RuleMessage;
 import io.fire.rule.spi.INodeContext;
-import io.fire.rule.spi.NodeConfig;
-import io.fire.rule.spi.NodeException;
 import io.fire.rule.spi.RuleNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,11 +37,6 @@ public class DeviceValidateNode implements RuleNode {
 
     public DeviceValidateNode(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
-    }
-
-    @Override
-    public void init(INodeContext ctx, NodeConfig config) throws NodeException {
-        // 无配置项：校验规则固化在节点内，真实项目可改为按 deviceType 加载校验模板
     }
 
     @Override

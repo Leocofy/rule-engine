@@ -2,6 +2,7 @@ package io.fire.rule.spi;
 
 /**
  * Description: RuleNodeDefinition
+ * SPI 引入必须集成该接口，以保证基础的信息提供
  *
  * @author Cai FeiYue
  * @date 2026/10/22
@@ -14,19 +15,23 @@ public interface RuleNodeDefinition extends RuleNode {
     String type();
 
     /**
-     * 组件名称，用于前端展示。
-     */
-    String title();
-
-    /**
      * 分类，用于前端分组展示。
      */
     String category();
 
     /**
+     * 组件名称，用于前端展示。
+     */
+    default String title() {
+        return type();
+    }
+
+    /**
      * 组件描述，用于前端展示。
      */
-    String description();
+    default String description() {
+        return null;
+    }
 
     /**
      * 声明的输出关系名；为空表示使用默认的 Success / Failure。

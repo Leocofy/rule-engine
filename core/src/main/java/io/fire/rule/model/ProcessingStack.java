@@ -1,6 +1,7 @@
 package io.fire.rule.model;
 
 import java.util.LinkedList;
+import java.util.Objects;
 
 /**
  * 处理栈：记录消息的跨链调用路径。
@@ -66,6 +67,6 @@ public final class ProcessingStack {
     }
 
     private static boolean eq(String a, String b) {
-        return a == null ? b == null : a.equals(b);
+        return Objects.equals(a, b);
     }
 }

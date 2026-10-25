@@ -185,10 +185,7 @@ public class PackProcessor {
 
     private void submitOne(final PackContext packCtx, final String id, Envelope envelope) {
         // 每条消息带上批次回调，节点的 ack / failure 才能回传
-        final RuleMessage msg = envelope.getMessage()
-                .copy()
-                .callback(packCtx.callbackFor(id))
-                .build();
+        RuleMessage msg = envelope.getMessage();
 
         // 按 originator 分区：同一设备串行，不同设备并行
         dispatcher.execute(msg.getOriginator() == null ? "default" : msg.getOriginator(),
@@ -196,33 +193,13 @@ public class PackProcessor {
                     try {
                         // 跨节点恢复的消息带 relations，走 resume 而非 execute
                         Set<String> relations = envelope.getRelations();
-                        if (relations != null && !relations.isEmpty() && msg.getNodeId() != null
-                                && msg.getChainId() != null) {
-                            chainExecutor.resume(msg.getChainId(), msg.getNodeId(),
-                                    msg, relations, new ExecutionCallback() {
-                                        @Override
-                                        public void onComplete() {
-                                            packCtx.onSuccess(id);
-                                        }
-
-                                        @Override
-                                        public void onError(Throwable t) {
-                                            packCtx.onFailure(id, t);
-                                        }
-                                    });
+                        if (relations != null && !relations.isEmpty() && envelope.getNodeId() != null
+                                && envelope.getChainId() != null) {
+                            chainExecutor.resume(envelope.getChainId(), envelope.getNodeId(),
+                                    msg, relations, new PackExecuteCallback(packCtx, id));
                             return;
                         }
-                        chainExecutor.execute(msg, new ExecutionCallback() {
-                            @Override
-                            public void onComplete() {
-                                packCtx.onSuccess(id);
-                            }
-
-                            @Override
-                            public void onError(Throwable t) {
-                                packCtx.onFailure(id, t);
-                            }
-                        });
+                        chainExecutor.execute(msg, new PackExecuteCallback(packCtx, id));
                     } catch (Exception e) {
                         packCtx.onFailure(id, e);
                     }
@@ -250,6 +227,38 @@ public class PackProcessor {
             Thread.sleep(ms);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+        }
+    }
+
+
+    private static class PackExecuteCallback implements ExecutionCallback {
+
+        private final PackContext packCtx;
+        private final String id;
+
+        private PackExecuteCallback(PackContext packCtx, String id) {
+            this.packCtx = packCtx;
+            this.id = id;
+        }
+
+        @Override
+        public void onComplete() {
+            packCtx.onSuccess(id);
+        }
+
+        @Override
+        public void onError(Throwable t) {
+            packCtx.onFailure(id, t);
+        }
+
+        @Override
+        public void onFanOut(int branches) {
+            packCtx.onFanOut(id, branches);
+        }
+
+        @Override
+        public boolean isValid() {
+            return !packCtx.isCanceled();
         }
     }
 

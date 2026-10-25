@@ -4,7 +4,7 @@ import io.fire.rule.model.RuleMessage;
 import io.fire.rule.spi.IExpressionEngine;
 import io.fire.rule.spi.IMessageSink;
 import io.fire.rule.spi.INodeContext;
-import io.fire.rule.spi.NodeDefinition;
+import io.fire.rule.spi.NodeConfig;
 
 import java.util.*;
 import java.util.concurrent.Executor;
@@ -32,19 +32,18 @@ public class DefaultNodeContext implements INodeContext {
     private final IMessageSink sink;
     private final Map<Class<?>, Object> capabilities;
     private final ExecutionCallback callback;
+    private final ExecutionContext execCtx;
 
-    private DefaultNodeContext(ChainExecutor executor, RuleChain chain, String nodeId,
-                               IExpressionEngine expressionEngine, Executor asyncExecutor,
-                               IMessageSink sink, Map<Class<?>, Object> capabilities,
-                               ExecutionCallback callback) {
-        this.executor = executor;
-        this.chain = chain;
-        this.nodeId = nodeId;
-        this.expressionEngine = expressionEngine;
-        this.asyncExecutor = asyncExecutor;
-        this.sink = sink;
-        this.capabilities = capabilities != null ? capabilities : new HashMap<>();
-        this.callback = callback;
+    private DefaultNodeContext(Builder b) {
+        this.executor = b.executor;
+        this.chain = b.chain;
+        this.expressionEngine = b.expressionEngine;
+        this.asyncExecutor = b.asyncExecutor;
+        this.sink = b.sink;
+        this.capabilities = b.capabilities != null ? b.capabilities : new HashMap<>();
+        this.callback = b.callback;
+        this.execCtx = b.execCtx;
+        this.nodeId = execCtx != null ? execCtx.getNodeId() : b.nodeId;
     }
 
     @Override
@@ -62,7 +61,7 @@ public class DefaultNodeContext implements INodeContext {
         if (msg == null || relationTypes == null || relationTypes.isEmpty()) {
             return;
         }
-        if (!msg.isValid()) {
+        if (!isValid()) {
             return; // 批次已超时/取消，放弃处理
         }
 
@@ -73,7 +72,7 @@ public class DefaultNodeContext implements INodeContext {
             totalTargets += chain.downstream(nodeId, relation).size();
         }
         if (totalTargets > 1) {
-            msg.getCallback().onFanOut(totalTargets);
+            callback.onFanOut(totalTargets);
         }
 
         boolean anyRouted = false;
@@ -84,8 +83,7 @@ public class DefaultNodeContext implements INodeContext {
             }
             for (String target : targets) {
                 anyRouted = true;
-                executor.dispatch(chain, target,
-                        msg.transform().chainId(chain.getId()).nodeId(target).build(), callback);
+                executor.dispatch(chain, target, msg, execCtx, callback);
             }
         }
 
@@ -107,16 +105,13 @@ public class DefaultNodeContext implements INodeContext {
             return;
         }
         for (String target : targets) {
-            executor.dispatch(chain, target, msg.transform()
-                    .chainId(chain.getId())
-                    .nodeId(target)
-                    .build(), callback);
+            executor.dispatch(chain, target, msg, execCtx, callback);
         }
     }
 
     @Override
     public void tellSelf(RuleMessage msg, long delayMs) {
-        executor.scheduleSelf(chain, nodeId, msg, delayMs);
+        executor.scheduleSelf(chain, nodeId, msg, execCtx, delayMs);
     }
 
     @Override
@@ -128,7 +123,7 @@ public class DefaultNodeContext implements INodeContext {
      * 跨节点投递：关系名随消息一起序列化，消费端据此继续路由。
      */
     public void enqueueForTellNext(RuleMessage msg, Set<String> relationTypes) {
-        if (!msg.isValid()) {
+        if (!isValid()) {
             return;
         }
         if (sink == null) {
@@ -136,29 +131,25 @@ public class DefaultNodeContext implements INodeContext {
             tellNext(msg, relationTypes);
             return;
         }
-        sink.send(msg.getChainId(), msg.transform()
-                .chainId(chain.getId())
-                .nodeId(nodeId)
-                .build(), relationTypes);
+        sink.send(chain.getId(), nodeId, msg, relationTypes);
     }
 
     @Override
     public void input(RuleMessage msg, String chainId) {
-        if (!msg.isValid()) {
+        if (!isValid()) {
             return;
         }
         // 循环检测：同一 (chain, node) 已在栈中说明成环
-        if (msg.alreadyInStack(chainId, nodeId)) {
+        if (execCtx.alreadyInStack(chainId, nodeId)) {
             tellFailure(msg, new IllegalStateException(
                     "检测到规则链循环引用: chain=" + chainId + ", node=" + nodeId));
             return;
         }
-        RuleMessage next = msg.copy()
-                .chainId(chainId)
-                .resetNodeId()
-                .build();
-        next.pushToStack(chain.getId(), nodeId);   // 压栈：记住从哪来
-        executor.execute(next, callback);
+        ExecutionContext childCtx = execCtx.copy();
+        childCtx.setChainId(chainId);
+        childCtx.setNodeId(null);
+        childCtx.pushToStack(chain.getId(), nodeId);   // 压栈：记住从哪来
+        executor.execute(msg, childCtx, callback);
     }
 
     @Override
@@ -173,7 +164,7 @@ public class DefaultNodeContext implements INodeContext {
      * 若调用者节点在该关系下也没有下游，继续向上回溯（支持多层嵌套）。
      */
     private void outputRecursive(RuleMessage msg, String relation) {
-        String[] caller = msg.popFromStack();
+        String[] caller = execCtx.popFromStack();
         if (caller == null) {
             complete(msg);                          // 已回到顶层链，确认完成
             return;
@@ -189,10 +180,7 @@ public class DefaultNodeContext implements INodeContext {
             return;
         }
         for (String target : targets) {
-            executor.dispatch(callerChain, target, msg.transform()
-                    .chainId(caller[0])
-                    .nodeId(target)
-                    .build(), callback);
+            executor.dispatch(callerChain, target, msg, execCtx, callback);
         }
     }
 
@@ -205,15 +193,6 @@ public class DefaultNodeContext implements INodeContext {
         if (callback != null) {
             callback.onComplete();
         }
-    }
-
-    @Override
-    public RuleMessage newMessage(String type, String originator, String payload) {
-        return RuleMessage.newMessage()
-                .type(type)
-                .originator(originator)
-                .payload(payload)
-                .build();
     }
 
     @Override
@@ -234,13 +213,13 @@ public class DefaultNodeContext implements INodeContext {
     }
 
     @Override
-    public String getChainId() {
-        return chain.getId();
+    public NodeConfig nodeConfig() {
+        return chain.nodeConfig(nodeId);
     }
 
     @Override
-    public String getNodeId() {
-        return nodeId;
+    public boolean isValid() {
+        return callback != null && callback.isValid();
     }
 
     public static Builder builder() {
@@ -248,14 +227,15 @@ public class DefaultNodeContext implements INodeContext {
     }
 
     public static class Builder {
-        private ChainExecutor executor;
-        private RuleChain chain;
-        private String nodeId;
-        private IExpressionEngine expressionEngine;
-        private Executor asyncExecutor;
-        private IMessageSink sink;
-        private Map<Class<?>, Object> capabilities;
-        private ExecutionCallback callback;
+        protected ChainExecutor executor;
+        protected RuleChain chain;
+        protected String nodeId;
+        protected IExpressionEngine expressionEngine;
+        protected Executor asyncExecutor;
+        protected IMessageSink sink;
+        protected Map<Class<?>, Object> capabilities;
+        protected ExecutionCallback callback;
+        protected ExecutionContext execCtx;
 
         public Builder executor(ChainExecutor executor) {
             this.executor = executor;
@@ -302,8 +282,13 @@ public class DefaultNodeContext implements INodeContext {
             return this;
         }
 
+        public Builder execCtx(ExecutionContext execCtx) {
+            this.execCtx = execCtx;
+            return this;
+        }
+
         public DefaultNodeContext build() {
-            return new DefaultNodeContext(executor, chain, nodeId, expressionEngine, asyncExecutor, sink, capabilities, callback);
+            return new DefaultNodeContext(this);
         }
     }
 }

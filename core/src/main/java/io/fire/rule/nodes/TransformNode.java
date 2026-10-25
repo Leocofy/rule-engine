@@ -1,8 +1,9 @@
 package io.fire.rule.nodes;
 
 import io.fire.rule.model.RuleMessage;
-import io.fire.rule.spi.*;
 import io.fire.rule.spi.IExpressionEngine;
+import io.fire.rule.spi.INodeContext;
+import io.fire.rule.spi.RuleNodeDefinition;
 
 /**
  * 转换节点：改写 payload 与 metadata。
@@ -13,15 +14,10 @@ import io.fire.rule.spi.IExpressionEngine;
  */
 public class TransformNode implements RuleNodeDefinition {
 
-    private String expr;
-
-    @Override
-    public void init(INodeContext ctx, NodeConfig config) throws NodeException {
-        this.expr = config.get("expr");
-    }
-
     @Override
     public void onMsg(INodeContext ctx, RuleMessage msg) throws Exception {
+        String expr = ctx.nodeConfig().getString("expr");
+
         String newPayload = ctx.expressionEngine().transform(expr, msg);
         RuleMessage next = msg.transform()
                 .payload(newPayload)

@@ -6,19 +6,23 @@ package io.fire.rule.chain;
  */
 public interface ExecutionCallback {
 
-    /** 空实现：用于 tellSelf 等无批次归属的场景。 */
     ExecutionCallback NOOP = new ExecutionCallback() {
         @Override
         public void onComplete() {
         }
-
         @Override
         public void onError(Throwable t) {
         }
     };
 
-    /** 链路走完（被某个节点 ack，或走到尽头无人接手）。 */
     void onComplete();
 
     void onError(Throwable t);
+
+    default void onFanOut(int branches) {
+    }
+
+    default boolean isValid() {
+        return true;
+    }
 }

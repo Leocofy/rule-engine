@@ -23,14 +23,14 @@ public class JsonMessageSerializer implements MessageSerializer {
     private static final Charset UTF8 = StandardCharsets.UTF_8;
 
     @Override
-    public byte[] serialize(RuleMessage msg, Set<String> relations) {
+    public byte[] serialize(RuleMessage msg, String chainId, String nodeId, Set<String> relations) {
         Map<String, Object> root = new LinkedHashMap<>();
         root.put("id", msg.getId());
         root.put("type", msg.getType());
         root.put("originator", msg.getOriginator());
         root.put("payload", msg.getPayload());
-        root.put("chainId", msg.getChainId());
-        root.put("nodeId", msg.getNodeId());
+        root.put("chainId", chainId);
+        root.put("nodeId", nodeId);
 
         Map<String, String> meta = msg.getMetaData().values();
         if (!meta.isEmpty()) {
@@ -82,11 +82,9 @@ public class JsonMessageSerializer implements MessageSerializer {
     public RuleMessage toRuleMessage(TransportMessage t) {
         RuleMessage.Builder b = RuleMessage.newMessage()
                 .id(t.getId())
-                .type(t.getType() == null ? "UNKNOWN" : t.getType())
+                .type(t.getType())
                 .originator(t.getOriginator())
-                .payload(t.getPayload())
-                .chainId(t.getChainId())
-                .nodeId(t.getNodeId());
+                .payload(t.getPayload());
         MetaData md = decodeMetaData(t.getMetaData());
         if (md != null) {
             b.metaData(md);

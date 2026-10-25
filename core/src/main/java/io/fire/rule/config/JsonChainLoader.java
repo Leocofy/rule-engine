@@ -63,17 +63,19 @@ public final class JsonChainLoader {
                 throw new NodeException("节点 " + nodeId + " 缺少 type", true);
             }
             RuleNode node = registry.get(type);
+            if (node == null) {
+                throw new NodeException("找不到类型为 " + type + " 的 RuleNodeSPI 实现", true);
+            }
 
-            Map<String, String> props = new HashMap<String, String>();
+            Map<String, Object> props = new HashMap<String, Object>();
             Object rawProps = nodeDef.get("props");
             if (rawProps != null) {
                 for (Map.Entry<String, Object> p : JsonUtil.asObject(rawProps).entrySet()) {
-                    props.put(p.getKey(), JsonUtil.asString(p.getValue()));
+                    props.put(p.getKey(), p.getValue());
                 }
             }
             NodeConfig config = new NodeConfig(props);
-            node.init(null, config);   // 无上下文初始化：仅解析配置、编译脚本
-            chain.addNode(nodeId, type, node);
+            chain.addNode(nodeId, type, node, config);
         }
 
         // 边：默认关系为 Success

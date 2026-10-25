@@ -38,19 +38,19 @@ public class DistributedIMessageSink implements IMessageSink {
     }
 
     @Override
-    public void send(String queueName, RuleMessage msg, Set<String> relations) {
+    public void send(String chainId, String nodeId, RuleMessage msg, Set<String> relations) {
         String key = msg.getOriginator() == null ? "default" : msg.getOriginator();
         int partition = router.partitionOf(key, router.partitionCount());
 
         if (router.isLocal(partition)) {
             // 本地：直接内存路由，零序列化开销
-            chainExecutor.resume(msg.getChainId(), msg.getNodeId(), msg, relations,
+            chainExecutor.resume(chainId, nodeId, msg, relations,
                     ExecutionCallback.NOOP);
             return;
         }
         // 远程：序列化后投递到目标分区
-        byte[] data = serializer.serialize(msg, relations);
-        transport.send(queueName, partition, key, data);
+        byte[] data = serializer.serialize(msg, chainId, nodeId, relations);
+        transport.send(chainId, partition, key, data);
     }
 
     /**

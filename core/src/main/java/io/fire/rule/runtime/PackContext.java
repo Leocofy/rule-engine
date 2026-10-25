@@ -1,6 +1,5 @@
 package io.fire.rule.runtime;
 
-import io.fire.rule.model.PackCallback;
 import io.fire.rule.runtime.strategy.SubmitStrategy;
 
 import java.util.ArrayList;
@@ -222,33 +221,6 @@ public class PackContext {
             out.add(e.getKey() + " : " + e.getValue().getMessage());
         }
         return out;
-    }
-
-    /**
-     * 消息级的回调桥梁，注入到 RuleMessage 中供节点回调。
-     */
-    public PackCallback callbackFor(final String id) {
-        return new PackCallback() {
-            @Override
-            public void onSuccess() {
-                PackContext.this.onSuccess(id);
-            }
-
-            @Override
-            public void onFailure(Throwable t) {
-                PackContext.this.onFailure(id, t);
-            }
-
-            @Override
-            public void onFanOut(int branches) {
-                PackContext.this.onFanOut(id, branches);
-            }
-
-            @Override
-            public boolean isValid() {
-                return !canceled;
-            }
-        };
     }
 
     public static class UnknownException extends RuntimeException {

@@ -74,37 +74,41 @@ public class ChainExecutor {
         return chains.get(chainId);
     }
 
-    /** 入口：按消息当前所处位置决定从哪开始。 */
+    /** 入口：使用默认链 ID 从入口节点开始执行。 */
     public void execute(RuleMessage msg, ExecutionCallback callback) {
-        String chainId = msg.getChainId();
-        if (chainId == null) {
-            if (defaultChainId != null) {
-                chainId = defaultChainId;
-            } else {
-                callback.onError(new IllegalStateException("未指定规则链 ID"));
-            }
+        if (defaultChainId == null) {
+            callback.onError(new IllegalStateException("未指定规则链 ID"));
+            return;
         }
-        executeInternal(msg.copy().chainId(chainId).build(), callback);
+        ExecutionContext execCtx = new ExecutionContext();
+        execCtx.setChainId(defaultChainId);
+        execute(msg, execCtx, callback);
     }
 
-    private void executeInternal(RuleMessage msg, ExecutionCallback callback) {
-        RuleChain chain = chains.get(msg.getChainId());
+    /** 入口：按执行上下文所处位置决定从哪开始。 */
+    public void execute(RuleMessage msg, ExecutionContext execCtx, ExecutionCallback callback) {
+        String chainId = execCtx.getChainId();
+        if (chainId == null) {
+            callback.onError(new IllegalStateException("未指定规则链 ID"));
+            return;
+        }
+        RuleChain chain = chains.get(chainId);
         if (chain == null) {
-            callback.onError(new IllegalStateException("未注册的规则链: " + msg.getChainId()));
+            callback.onError(new IllegalStateException("未注册的规则链: " + chainId));
             return;
         }
-        String nodeId = msg.getNodeId();
+        String nodeId = execCtx.getNodeId();
         if (nodeId != null && chain.hasNode(nodeId)) {
-            dispatch(chain, nodeId, msg, callback);   // 从队列恢复，继续原节点
+            dispatch(chain, nodeId, msg, execCtx, callback);   // 从队列恢复，继续原节点
             return;
         }
-        List<String> entries = chain.entryNodes();
-        if (entries.isEmpty()) {
+        List<String> nodeIds = chain.entryNodes();
+        if (nodeIds.isEmpty()) {
             callback.onComplete();
             return;
         }
-        for (String entry : entries) {
-            dispatch(chain, entry, msg, callback);
+        for (String id : nodeIds) {
+            dispatch(chain, id, msg, execCtx, callback);
         }
     }
 
@@ -132,6 +136,9 @@ public class ChainExecutor {
             return;
         }
         // 复用 DefaultNodeContext 的路由逻辑：它持有 nodeId，查邻接表即可
+        ExecutionContext execCtx = new ExecutionContext();
+        execCtx.setChainId(chainId);
+        execCtx.setNodeId(nodeId);
         INodeContext ctx = DefaultNodeContext.builder()
                 .executor(this)
                 .chain(chain)
@@ -141,18 +148,23 @@ public class ChainExecutor {
                 .sink(sink)
                 .capabilities(capabilities)
                 .callback(callback)
+                .execCtx(execCtx)
                 .build();
         ctx.tellNext(msg, relations);
     }
 
     /** 把消息交给指定节点处理。 */
     public void dispatch(final RuleChain chain, final String nodeId,
-                         final RuleMessage msg, final ExecutionCallback callback) {
+                         final RuleMessage msg, final ExecutionContext execCtx,
+                         final ExecutionCallback callback) {
         RuleNode node = chain.node(nodeId);
         if (node == null) {
             callback.onComplete();
             return;
         }
+        ExecutionContext childCtx = execCtx.copy();
+        childCtx.setChainId(chain.getId());
+        childCtx.setNodeId(nodeId);
         INodeContext ctx = DefaultNodeContext.builder()
                 .executor(this)
                 .chain(chain)
@@ -162,30 +174,29 @@ public class ChainExecutor {
                 .sink(sink)
                 .capabilities(capabilities)
                 .callback(callback)
+                .execCtx(childCtx)
                 .build();
 
         long start = System.nanoTime();
         try {
-            node.onMsg(ctx, msg.transform().chainId(chain.getId()).nodeId(nodeId).build());
+            node.onMsg(ctx, msg);
         } catch (Exception e) {
             observer.onNodeError(chain.getId(), nodeId, e);
             callback.onError(e);
             return;
         }
+
         observer.onNodeFinished(chain.getId(), nodeId, System.nanoTime() - start);
     }
 
     /** tellSelf：延迟投递给自己，用于周期任务 / 超时检查。 */
     public void scheduleSelf(final RuleChain chain, final String nodeId,
-                             final RuleMessage msg, long delayMs) {
-        scheduler.schedule(() -> dispatch(chain, nodeId, msg, ExecutionCallback.NOOP), delayMs, TimeUnit.MILLISECONDS);
+                             final RuleMessage msg, final ExecutionContext execCtx, long delayMs) {
+        scheduler.schedule(() -> dispatch(chain, nodeId, msg, execCtx, ExecutionCallback.NOOP), delayMs, TimeUnit.MILLISECONDS);
     }
 
     public void shutdown() {
         scheduler.shutdown();
-        for (RuleChain chain : chains.values()) {
-            chain.destroy();
-        }
     }
 
     public static Builder builder() {

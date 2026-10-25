@@ -3,8 +3,6 @@ package io.fire.rule.example.node;
 import io.fire.rule.config.NodeComponent;
 import io.fire.rule.model.RuleMessage;
 import io.fire.rule.spi.INodeContext;
-import io.fire.rule.spi.NodeConfig;
-import io.fire.rule.spi.NodeException;
 import io.fire.rule.spi.RuleNode;
 
 /**
@@ -26,11 +24,6 @@ public class NotifyNode implements RuleNode {
     private static final String TARGET = "notify";
 
     @Override
-    public void init(INodeContext ctx, NodeConfig config) throws NodeException {
-        // 通知渠道由 alert.channels 决定，节点无需配置
-    }
-
-    @Override
     public void onMsg(final INodeContext ctx, final RuleMessage msg) throws Exception {
         final AsyncSinkNode.SinkHandler handler = ctx.capability(AsyncSinkNode.SinkHandler.class);
         if (handler == null) {
@@ -39,7 +32,7 @@ public class NotifyNode implements RuleNode {
         }
         ctx.asyncExecutor().execute(() -> {
             try {
-                if (!msg.isValid()) {
+                if (!ctx.isValid()) {
                     return;
                 }
                 handler.handle(TARGET, msg);

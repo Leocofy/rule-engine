@@ -2,8 +2,6 @@ package io.fire.rule.nodes;
 
 import io.fire.rule.model.RuleMessage;
 import io.fire.rule.spi.INodeContext;
-import io.fire.rule.spi.NodeConfig;
-import io.fire.rule.spi.NodeException;
 import io.fire.rule.spi.RuleNodeDefinition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,15 +16,9 @@ public class LogNode implements RuleNodeDefinition {
 
     private static final Logger LOG = LoggerFactory.getLogger(LogNode.class);
 
-    private String prefix;
-
-    @Override
-    public void init(INodeContext ctx, NodeConfig config) throws NodeException {
-        this.prefix = config.getOrDefault("prefix", "[rule]");
-    }
-
     @Override
     public void onMsg(INodeContext ctx, RuleMessage msg) throws Exception {
+        String prefix = ctx.nodeConfig().getString("prefix", "[rule]");
         LOG.info("{} {} originator={} payload={} meta={}", prefix, msg.getType(),
                 msg.getOriginator(), msg.getPayload(), msg.getMetaData().values());
         ctx.tellSuccess(msg);
@@ -50,20 +42,5 @@ public class LogNode implements RuleNodeDefinition {
     @Override
     public String description() {
         return "打印消息内容并放行";
-    }
-
-    @Override
-    public String[] relations() {
-        return new String[0];
-    }
-
-    @Override
-    public boolean customRelations() {
-        return false;
-    }
-
-    @Override
-    public String version() {
-        return "1.0";
     }
 }

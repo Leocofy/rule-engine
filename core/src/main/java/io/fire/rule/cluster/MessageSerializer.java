@@ -13,7 +13,7 @@ import java.util.Set;
  */
 public interface MessageSerializer {
 
-    byte[] serialize(RuleMessage msg, Set<String> relations);
+    byte[] serialize(RuleMessage msg, String chainId, String nodeId, Set<String> relations);
 
     TransportMessage deserialize(byte[] data);
 
