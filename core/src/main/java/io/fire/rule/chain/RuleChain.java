@@ -16,8 +16,8 @@ import java.util.*;
  */
 public final class RuleChain {
 
-    private final String id;
-    private final String name;
+    private String id;
+    private String name;
     private final Map<String, RuleNode> nodes = new LinkedHashMap<>();
     private final Map<String, String> nodeTypes = new LinkedHashMap<>();
     private final Map<String, NodeConfig> nodeConfigs = new HashMap<>();
@@ -79,6 +79,14 @@ public final class RuleChain {
 
     public boolean hasNode(String nodeId) {
         return nodes.containsKey(nodeId);
+    }
+
+    public void setId(String id) {
+        this.id = id;
+    }
+
+    public void setName(String name) {
+        this.name = name;
     }
 
     /**

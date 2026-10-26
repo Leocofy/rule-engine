@@ -24,4 +24,8 @@ public class TaskExecuteException extends RuntimeException {
         super(message, cause);
     }
 
+    public TaskExecuteException(Throwable cause) {
+        super(cause);
+    }
+
 }

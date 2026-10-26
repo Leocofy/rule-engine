@@ -2,17 +2,13 @@ package io.fire.rule.chain;
 
 import io.fire.rule.model.RuleMessage;
 import io.fire.rule.observability.EngineObserver;
-import io.fire.rule.runtime.TaskExecuteException;
-import io.fire.rule.spi.IExpressionEngine;
-import io.fire.rule.spi.IMessageSink;
-import io.fire.rule.spi.INodeContext;
-import io.fire.rule.spi.RuleNode;
+import io.fire.rule.spi.*;
+import io.fire.rule.store.IChainStore;
 
 import java.util.HashMap;
-import java.util.Set;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -26,22 +22,20 @@ import java.util.concurrent.TimeUnit;
  */
 public class ChainExecutor {
 
-    private final Map<String, RuleChain> chains = new LinkedHashMap<>();
+    private final IChainStore chainStore;
     private final IExpressionEngine expressionEngine;
     private final Executor asyncExecutor;
     private volatile IMessageSink sink;
     private final Map<Class<?>, Object> capabilities = new HashMap<>();
     private final EngineObserver observer;
     private final ScheduledExecutorService scheduler;
-    private final String defaultChainId;
 
     public ChainExecutor(Builder b) {
+        this.chainStore = b.chainStore;
         this.expressionEngine = b.expressionEngine;
         this.asyncExecutor = b.asyncExecutor;
         this.sink = b.sink;
         this.observer = b.observer != null ? b.observer : EngineObserver.NOOP;
-        this.defaultChainId = b.defaultChainId;
-        this.sink = b.sink;
         this.scheduler = Executors.newScheduledThreadPool(1, r -> {
             Thread t = new Thread(r, "rule-self-scheduler");
             t.setDaemon(true);
@@ -66,49 +60,45 @@ public class ChainExecutor {
         return sink;
     }
 
-    public void register(RuleChain chain) {
-        chains.put(chain.getId(), chain);
+    public RuleChain register(Object chain) throws NodeException {
+        return chainStore.registerChain(chain);
     }
 
-    public RuleChain chain(String chainId) {
-        return chains.get(chainId);
+    public RuleChain getChain(String chainId) {
+        return chainStore.getChain(chainId);
     }
 
-    /** 入口：使用默认链 ID 从入口节点开始执行。 */
-    public void execute(RuleMessage msg, ExecutionCallback callback) {
-        if (defaultChainId == null) {
-            callback.onError(new IllegalStateException("未指定规则链 ID"));
-            return;
-        }
-        ExecutionContext execCtx = new ExecutionContext();
-        execCtx.setChainId(defaultChainId);
-        execute(msg, execCtx, callback);
+    public void execute(RuleMessage msg, String chainId, ExecutionContext ctx) {
+        execute(msg, chainId, null, ctx);
     }
 
-    /** 入口：按执行上下文所处位置决定从哪开始。 */
-    public void execute(RuleMessage msg, ExecutionContext execCtx, ExecutionCallback callback) {
-        String chainId = execCtx.getChainId();
+    /**
+     * 入口：按执行上下文所处位置决定从哪开始。
+     */
+    public void execute(RuleMessage msg, String chainId, String nodeId, ExecutionContext execCtx) {
         if (chainId == null) {
-            callback.onError(new IllegalStateException("未指定规则链 ID"));
+            execCtx.getCallback().onError(new IllegalStateException("未指定规则链 ID"));
             return;
         }
-        RuleChain chain = chains.get(chainId);
+        RuleChain chain = chainStore.getChain(chainId);
         if (chain == null) {
-            callback.onError(new IllegalStateException("未注册的规则链: " + chainId));
+            execCtx.getCallback().onError(new IllegalStateException("未注册的规则链: " + chainId));
             return;
         }
-        String nodeId = execCtx.getNodeId();
+
+        // 从队列恢复，继续原节点
         if (nodeId != null && chain.hasNode(nodeId)) {
-            dispatch(chain, nodeId, msg, execCtx, callback);   // 从队列恢复，继续原节点
+            dispatch(chain, nodeId, msg, execCtx);
             return;
         }
+
         List<String> nodeIds = chain.entryNodes();
         if (nodeIds.isEmpty()) {
-            callback.onComplete();
+            execCtx.getCallback().onComplete();
             return;
         }
         for (String id : nodeIds) {
-            dispatch(chain, id, msg, execCtx, callback);
+            dispatch(chain, id, msg, execCtx);
         }
     }
 
@@ -123,22 +113,18 @@ public class ChainExecutor {
      * 序列化后投递到实例 B。B 如果重新执行 X，会造成重复处理；
      * 正确做法是直接从 X 的 "有隐患" 关系继续往下走。
      */
-    public void resume(String chainId, String nodeId, RuleMessage msg,
-                       Set<String> relations, ExecutionCallback callback) {
-        RuleChain chain = chains.get(chainId);
+    public void resume(RuleMessage msg, String chainId, String nodeId, Set<String> relations, ExecutionContext execCtx) {
+        RuleChain chain = chainStore.getChain(chainId);
         if (chain == null) {
-            callback.onError(new IllegalStateException("未注册的规则链: " + chainId));
+            execCtx.getCallback().onError(new IllegalStateException("未注册的规则链: " + chainId));
             return;
         }
         if (!chain.hasNode(nodeId)) {
-            callback.onError(new IllegalStateException(
+            execCtx.getCallback().onError(new IllegalStateException(
                     "规则链 " + chainId + " 中不存在节点: " + nodeId));
             return;
         }
         // 复用 DefaultNodeContext 的路由逻辑：它持有 nodeId，查邻接表即可
-        ExecutionContext execCtx = new ExecutionContext();
-        execCtx.setChainId(chainId);
-        execCtx.setNodeId(nodeId);
         INodeContext ctx = DefaultNodeContext.builder()
                 .executor(this)
                 .chain(chain)
@@ -147,24 +133,21 @@ public class ChainExecutor {
                 .asyncExecutor(asyncExecutor)
                 .sink(sink)
                 .capabilities(capabilities)
-                .callback(callback)
                 .execCtx(execCtx)
                 .build();
         ctx.tellNext(msg, relations);
     }
 
-    /** 把消息交给指定节点处理。 */
-    public void dispatch(final RuleChain chain, final String nodeId,
-                         final RuleMessage msg, final ExecutionContext execCtx,
-                         final ExecutionCallback callback) {
+    /**
+     * 把消息交给指定节点处理。
+     */
+    public void dispatch(RuleChain chain, String nodeId, RuleMessage msg, ExecutionContext execCtx) {
         RuleNode node = chain.node(nodeId);
         if (node == null) {
-            callback.onComplete();
+            execCtx.getCallback().onComplete();
             return;
         }
-        ExecutionContext childCtx = execCtx.copy();
-        childCtx.setChainId(chain.getId());
-        childCtx.setNodeId(nodeId);
+
         INodeContext ctx = DefaultNodeContext.builder()
                 .executor(this)
                 .chain(chain)
@@ -173,8 +156,7 @@ public class ChainExecutor {
                 .asyncExecutor(asyncExecutor)
                 .sink(sink)
                 .capabilities(capabilities)
-                .callback(callback)
-                .execCtx(childCtx)
+                .execCtx(execCtx)
                 .build();
 
         long start = System.nanoTime();
@@ -182,17 +164,19 @@ public class ChainExecutor {
             node.onMsg(ctx, msg);
         } catch (Exception e) {
             observer.onNodeError(chain.getId(), nodeId, e);
-            callback.onError(e);
+            execCtx.getCallback().onError(e);
             return;
         }
 
         observer.onNodeFinished(chain.getId(), nodeId, System.nanoTime() - start);
     }
 
-    /** tellSelf：延迟投递给自己，用于周期任务 / 超时检查。 */
-    public void scheduleSelf(final RuleChain chain, final String nodeId,
-                             final RuleMessage msg, final ExecutionContext execCtx, long delayMs) {
-        scheduler.schedule(() -> dispatch(chain, nodeId, msg, execCtx, ExecutionCallback.NOOP), delayMs, TimeUnit.MILLISECONDS);
+    /**
+     * tellSelf：延迟投递给自己，用于周期任务 / 超时检查。
+     */
+    public void scheduleSelf(RuleChain chain, String nodeId,
+                             RuleMessage msg, ExecutionContext execCtx, long delayMs) {
+        scheduler.schedule(() -> dispatch(chain, nodeId, msg, execCtx), delayMs, TimeUnit.MILLISECONDS);
     }
 
     public void shutdown() {
@@ -205,15 +189,14 @@ public class ChainExecutor {
 
     public static final class Builder {
         private IExpressionEngine expressionEngine;
+        private IChainStore chainStore;
         private Executor asyncExecutor;
         private IMessageSink sink;
         private EngineObserver observer;
         private Map<Class<?>, Object> capabilities;
-        private String defaultChainId;
 
-        /** 消息未携带 chainId 时使用的默认链。 */
-        public Builder defaultChainId(String defaultChainId) {
-            this.defaultChainId = defaultChainId;
+        public Builder chainStore(IChainStore chainStore) {
+            this.chainStore = chainStore;
             return this;
         }
 
@@ -237,7 +220,9 @@ public class ChainExecutor {
             return this;
         }
 
-        /** 注册业务能力，节点通过 ctx.capability(Xxx.class) 获取。 */
+        /**
+         * 注册业务能力，节点通过 ctx.capability(Xxx.class) 获取。
+         */
         public <T> Builder capability(Class<T> type, T impl) {
             if (capabilities == null) {
                 capabilities = new HashMap<Class<?>, Object>();
@@ -246,7 +231,9 @@ public class ChainExecutor {
             return this;
         }
 
-        /** 批量注册业务能力。 */
+        /**
+         * 批量注册业务能力。
+         */
         public Builder capabilities(Map<Class<?>, Object> map) {
             if (map == null) {
                 return this;

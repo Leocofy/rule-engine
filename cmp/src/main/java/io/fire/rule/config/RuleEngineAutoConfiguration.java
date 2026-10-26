@@ -13,7 +13,8 @@ import io.fire.rule.runtime.strategy.SubmitStrategy;
 import io.fire.rule.spi.IExpressionEngine;
 import io.fire.rule.spi.INodeRegistry;
 import io.fire.rule.spi.NodeException;
-import io.fire.rule.spi.NodeRegistry;
+import io.fire.rule.store.IChainStore;
+import io.fire.rule.store.InMemoryChainStore;
 import io.fire.rule.util.JsonUtil;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -51,7 +52,7 @@ import java.util.Map;
 @Configuration
 @ConditionalOnClass(RuleEngine.class)
 @ConditionalOnProperty(prefix = "rule.engine", name = "enabled", havingValue = "true", matchIfMissing = true)
-@EnableConfigurationProperties(RuleEngineProperties.class)
+@EnableConfigurationProperties(io.fire.rule.config.RuleEngineProperties.class)
 public class RuleEngineAutoConfiguration {
 
     @Bean
@@ -97,26 +98,22 @@ public class RuleEngineAutoConfiguration {
         return new SequentialByKeySubmitStrategy();
     }
 
-    @Bean(destroyMethod = "stop")
-    @ConditionalOnMissingBean(RuleEngine.class)
-    public RuleEngine ruleEngine(
+    @Bean
+    @ConditionalOnMissingBean(IChainStore.class)
+    public IChainStore chainStore(INodeRegistry registry) {
+        return new InMemoryChainStore(new JsonChainLoader(registry));
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(RuleEngine.Builder.class)
+    public RuleEngine.Builder engineBuilder(
             INodeRegistry nodeRegistry,
             IExpressionEngine expressionEngine,
             MessageSource messageSource,
             EngineObserver engineObserver,
             SubmitStrategy submitStrategy,
             RuleEngineProperties props,
-            ObjectProvider<RuleEngineCustomizer> customizerProvider) throws NodeException {
-
-        String chainJson = null;
-        String defaultChainId = props.getDefaultChainId();
-        if (props.getChainConfigPath() != null) {
-            chainJson = readClasspathResource(props.getChainConfigPath());
-            if (defaultChainId == null) {
-                Map<String, Object> root = JsonUtil.parseObject(chainJson);
-                defaultChainId = JsonUtil.asString(root.get("id"));
-            }
-        }
+            ObjectProvider<RuleEngineCustomizer> customizerProvider) {
 
         RuleEngine.Builder builder = RuleEngine.builder()
                 .registry(nodeRegistry)
@@ -127,33 +124,7 @@ public class RuleEngineAutoConfiguration {
                 .pollSize(props.getPollSize())
                 .packTimeoutMs(props.getPackTimeoutMs());
 
-        if (defaultChainId != null) {
-            builder.defaultChainId(defaultChainId);
-        }
-
         customizerProvider.orderedStream().forEach(c -> c.customize(builder));
-
-        RuleEngine engine = builder.build();
-
-        if (chainJson != null) {
-            engine.loadChain(chainJson);
-        }
-
-        if (props.isAutoStart()) {
-            engine.start();
-        }
-
-        return engine;
-    }
-
-    private String readClasspathResource(String path) {
-        try {
-            ClassPathResource resource = new ClassPathResource(path);
-            try (InputStream in = resource.getInputStream()) {
-                return StreamUtils.copyToString(in, StandardCharsets.UTF_8);
-            }
-        } catch (Exception e) {
-            throw new IllegalStateException("无法加载规则链配置: " + path, e);
-        }
+        return builder;
     }
 }

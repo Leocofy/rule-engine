@@ -16,4 +16,5 @@ import java.util.Set;
 public interface IMessageSink {
 
     void send(String chainId, String nodeId, RuleMessage msg, Set<String> relations);
+
 }

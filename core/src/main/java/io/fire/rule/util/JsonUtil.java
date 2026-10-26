@@ -1,12 +1,15 @@
 package io.fire.rule.util;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.fire.rule.config.JsonChainLoader;
 import io.fire.rule.runtime.TaskExecuteException;
 import org.slf4j.Logger;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -35,6 +38,15 @@ public final class JsonUtil {
             return om.writeValueAsString(o);
         } catch (JsonProcessingException e) {
             LOG.error("JSON 序列化失败 [{}]: ", o, e);
+            throw new TaskExecuteException("Invalid JSON data", e);
+        }
+    }
+
+    public static <T> T readValue(InputStream stream, Type type) {
+        try {
+            return om.readValue(stream, om.constructType(type));
+        } catch (IOException e) {
+            LOG.error("JSON stream 解析失败 [{}]: ", type, e);
             throw new TaskExecuteException("Invalid JSON data", e);
         }
     }

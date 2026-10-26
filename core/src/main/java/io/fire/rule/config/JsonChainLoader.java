@@ -33,7 +33,7 @@ import java.util.Map;
  * <p>edge 未声明 relation 时默认 "Success"——
  * 这让"串联"场景写起来最简洁，"分支"场景再显式指定关系名。
  */
-public final class JsonChainLoader {
+public final class JsonChainLoader implements IChainLoader {
 
     private final INodeRegistry registry;
 
@@ -41,8 +41,8 @@ public final class JsonChainLoader {
         this.registry = registry;
     }
 
-    public RuleChain load(String json) throws NodeException {
-        Map<String, Object> root = JsonUtil.parseObject(json);
+    public RuleChain load(Object json) throws NodeException {
+        Map<String, Object> root = JsonUtil.parseObject(json.toString());
         String id = JsonUtil.asString(root.get("id"));
         String name = JsonUtil.asString(root.get("name"));
         if (id == null || id.isEmpty()) {
@@ -70,9 +70,7 @@ public final class JsonChainLoader {
             Map<String, Object> props = new HashMap<String, Object>();
             Object rawProps = nodeDef.get("props");
             if (rawProps != null) {
-                for (Map.Entry<String, Object> p : JsonUtil.asObject(rawProps).entrySet()) {
-                    props.put(p.getKey(), p.getValue());
-                }
+                props.putAll(JsonUtil.asObject(rawProps));
             }
             NodeConfig config = new NodeConfig(props);
             chain.addNode(nodeId, type, node, config);

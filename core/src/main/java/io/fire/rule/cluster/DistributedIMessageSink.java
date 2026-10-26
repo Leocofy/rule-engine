@@ -1,7 +1,7 @@
 package io.fire.rule.cluster;
 
 import io.fire.rule.chain.ChainExecutor;
-import io.fire.rule.chain.ExecutionCallback;
+import io.fire.rule.chain.ExecutionContext;
 import io.fire.rule.model.RuleMessage;
 import io.fire.rule.spi.IMessageSink;
 
@@ -44,8 +44,7 @@ public class DistributedIMessageSink implements IMessageSink {
 
         if (router.isLocal(partition)) {
             // 本地：直接内存路由，零序列化开销
-            chainExecutor.resume(chainId, nodeId, msg, relations,
-                    ExecutionCallback.NOOP);
+            chainExecutor.resume(msg, chainId, nodeId, relations, new ExecutionContext());
             return;
         }
         // 远程：序列化后投递到目标分区

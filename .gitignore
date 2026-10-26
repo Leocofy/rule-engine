@@ -38,5 +38,11 @@ build/
 ### VS Code ###
 .vscode/
 
+### Rule Designer (web) ###
+web/node_modules/
+web/dist/
+web/.vite/
+web/.cache/
+
 ### Mac OS ###
 .DS_Store

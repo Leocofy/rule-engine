@@ -26,15 +26,9 @@ public class RuleEngineProperties {
 
     private boolean enabled = true;
 
-    private String defaultChainId;
-
-    private String chainConfigPath;
-
     private int pollSize = 256;
 
     private long packTimeoutMs = 2000L;
-
-    private boolean autoStart = true;
 
     private String expressionEngine = "aviator";
 
@@ -44,22 +38,6 @@ public class RuleEngineProperties {
 
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
-    }
-
-    public String getDefaultChainId() {
-        return defaultChainId;
-    }
-
-    public void setDefaultChainId(String defaultChainId) {
-        this.defaultChainId = defaultChainId;
-    }
-
-    public String getChainConfigPath() {
-        return chainConfigPath;
-    }
-
-    public void setChainConfigPath(String chainConfigPath) {
-        this.chainConfigPath = chainConfigPath;
     }
 
     public int getPollSize() {
@@ -76,14 +54,6 @@ public class RuleEngineProperties {
 
     public void setPackTimeoutMs(long packTimeoutMs) {
         this.packTimeoutMs = packTimeoutMs;
-    }
-
-    public boolean isAutoStart() {
-        return autoStart;
-    }
-
-    public void setAutoStart(boolean autoStart) {
-        this.autoStart = autoStart;
     }
 
     public String getExpressionEngine() {

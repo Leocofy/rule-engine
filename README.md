@@ -12,6 +12,7 @@
 | `core` | 引擎内核：模型、SPI、DAG 执行、批次运行、集群、观测 |
 | `cmp` | Spring Boot Starter：自动装配、节点注册、Aviator 表达式 |
 | `example` | 演示应用：HTTP 入口、消防告警链、白盒压测 |
+| `web` | 规则链设计器：Vue 3 + Vue Flow，构建产物输出到 example 静态目录 |
 
 ## 2. 整体架构
 
@@ -221,6 +222,35 @@ Invoke-RestMethod -Method Post -Uri http://localhost:18080/ruleExecute `
 
 `/ruleExecute` 会补全缺失的 `traceId` 与 `event` 头，并以 `device.deviceId` 作为 `originator`。
 
+### 3.7 可视化编排（规则链设计器）
+
+`web/` 是基于 Vue 3 + Vue Flow 的 DAG 设计器，构建产物直接写入 `example/src/main/resources/static/designer`，
+随示例应用一起打包：
+
+```powershell
+cd web
+npm install
+npm run build        # 输出到 example/src/main/resources/static/designer
+cd ..
+mvn -pl example -am package -DskipTests
+java -jar example/target/rule-engine-example-1.0.0.jar --server.port=18080
+```
+
+打开 <http://localhost:18080/designer/> 即可拖拽编排。
+
+- 节点库来自 `GET /designer/nodes`（由 `INodeRegistry` 定义生成），接口不可用时回退内置目录。
+- “加载示例”读取 `GET /designer/example`，返回引擎当前加载的规则链 JSON。
+- 节点右侧每个圆点是一个出口，圆点名称即 `relation`；`aiDecision` 等自定义关系节点先在右侧面板添加出口名。
+- 导出的 JSON 与 `JsonChainLoader` 格式一致，可直接放到 classpath 交给 `rule.engine.chain-config-path`。
+- 画布坐标只存在于设计器，导出文件不含坐标；“自动布局”按入口做 BFS 分层。
+
+前端单独开发（`/designer/nodes`、`/designer/example` 代理到 18080）：
+
+```powershell
+cd web
+npm run dev          # http://localhost:5173/designer/
+```
+
 ## 4. 配置项
 
 | 配置 | 默认值 | 说明 |
@@ -247,38 +277,6 @@ Invoke-RestMethod -Method Post -Uri http://localhost:18080/ruleExecute `
 | 边缘网关 | 设备 ID | core 无 Spring 依赖，可直接嵌入；有界队列形成反压 |
 | 异步审批流 | 流程 ID | `tellSelf` 延迟唤醒，`input/output` 嵌套子链；注意延迟任务不持久化 |
 | 规则可配置系统 | 业务主键 | JSON 持久化 + `@NodeComponent` 元数据驱动前端画布与表单 |
-
-## 6. 压测与观测
-
-`stress` profile 已内置压测参数：批次 64、超时 20s、lane/异步池扩容、Tomcat 400 线程、`io.fire` 日志降为 `warn`。
-
-```powershell
-Invoke-RestMethod http://localhost:18080/stress/stats
-Invoke-RestMethod -Method Post http://localhost:18080/stress/reset
-```
-
-`/stress/stats` 返回入口队列、批次 TPS、节点耗时、lane 队列、异步池、JVM 指标。
-
-k6 压测：
-
-```powershell
-k6 run -e BASE_URL=http://localhost:18080 -e RATE=200 -e DURATION=2m `
-  example/stress/http-stress.js
-```
-
-可调 `SCENARIO=steady|ramp`、`RATE`、`DURATION`、`RAMP_MAX`、`HOT_DEVICE`、`CRITICAL_PCT`。
-
-白盒压测（绕过 HTTP，直接灌入 `CallBackSource`）：
-
-```powershell
-mvn -pl example -am test -Dstress.test=true -Dstress.messages=300 -Dstress.devices=32
-```
-
-结果解读：
-
-- 压测前先 `POST /stress/reset`，否则 `tpsOverall` 会混入历史数据。
-- `lanes.queueSizes` 单通道堆积说明热点实体过多，应增加 lane 或细化 `originator`。
-- `asyncPool.queue` 持续增长说明下游 I/O 不足，应先扩池或降级。
 
 ## 7. 扩展点
 

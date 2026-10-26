@@ -2,6 +2,7 @@ package io.fire.rule.runtime;
 
 import io.fire.rule.chain.ChainExecutor;
 import io.fire.rule.chain.ExecutionCallback;
+import io.fire.rule.chain.ExecutionContext;
 import io.fire.rule.cluster.LoggingDeadLetterSink;
 import io.fire.rule.model.RuleMessage;
 import io.fire.rule.observability.EngineObserver;
@@ -16,7 +17,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -40,7 +40,6 @@ public class PackProcessor {
     private final SubmitStrategy submitStrategy;
     private final RetryStrategy retryStrategy;
     private final TaskDispatcher dispatcher;
-    private final Executor asyncExecutor;
     private final EngineObserver observer;
     private final IDeadLetterSink deadLetterSink;
 
@@ -62,7 +61,6 @@ public class PackProcessor {
         this.submitStrategy = b.submitStrategy;
         this.retryStrategy = b.retryStrategy;
         this.dispatcher = b.dispatcher;
-        this.asyncExecutor = b.asyncExecutor;
         this.observer = b.observer != null ? b.observer : EngineObserver.NOOP;
         this.pollSize = b.pollSize;
         this.pollIntervalMs = b.pollIntervalMs;
@@ -97,6 +95,7 @@ public class PackProcessor {
 
     public void stop() {
         running = false;
+
     }
 
     /**
@@ -183,7 +182,7 @@ public class PackProcessor {
         } while (true);
     }
 
-    private void submitOne(final PackContext packCtx, final String id, Envelope envelope) {
+    private void submitOne(PackContext packCtx, String id, Envelope envelope) {
         // 每条消息带上批次回调，节点的 ack / failure 才能回传
         RuleMessage msg = envelope.getMessage();
 
@@ -191,15 +190,16 @@ public class PackProcessor {
         dispatcher.execute(msg.getOriginator() == null ? "default" : msg.getOriginator(),
                 () -> {
                     try {
+                        PackExecuteCallback callback = new PackExecuteCallback(packCtx, id);
                         // 跨节点恢复的消息带 relations，走 resume 而非 execute
                         Set<String> relations = envelope.getRelations();
                         if (relations != null && !relations.isEmpty() && envelope.getNodeId() != null
                                 && envelope.getChainId() != null) {
-                            chainExecutor.resume(envelope.getChainId(), envelope.getNodeId(),
-                                    msg, relations, new PackExecuteCallback(packCtx, id));
+                            chainExecutor.resume(msg, envelope.getChainId(), envelope.getNodeId(), relations, new ExecutionContext(callback));
                             return;
                         }
-                        chainExecutor.execute(msg, new PackExecuteCallback(packCtx, id));
+
+                        chainExecutor.execute(msg, envelope.getChainId(), new ExecutionContext(callback));
                     } catch (Exception e) {
                         packCtx.onFailure(id, e);
                     }
@@ -230,7 +230,9 @@ public class PackProcessor {
         }
     }
 
-
+    /**
+     * 执行回调
+     */
     private static class PackExecuteCallback implements ExecutionCallback {
 
         private final PackContext packCtx;
@@ -272,7 +274,6 @@ public class PackProcessor {
         private SubmitStrategy submitStrategy = new BurstSubmitStrategy();
         private RetryStrategy retryStrategy = RetryStrategy.retryFailed();
         private TaskDispatcher dispatcher = KeyOrderedDispatcher.defaultDispatcher();
-        private Executor asyncExecutor;
         private EngineObserver observer;
         private IDeadLetterSink deadLetterSink;
         private int pollSize = 256;
@@ -301,11 +302,6 @@ public class PackProcessor {
 
         public Builder dispatcher(TaskDispatcher dispatcher) {
             this.dispatcher = dispatcher;
-            return this;
-        }
-
-        public Builder asyncExecutor(Executor asyncExecutor) {
-            this.asyncExecutor = asyncExecutor;
             return this;
         }
 
@@ -343,9 +339,6 @@ public class PackProcessor {
             }
             if (chainExecutor == null) {
                 throw new IllegalStateException("ChainExecutor 必填");
-            }
-            if (asyncExecutor == null) {
-                throw new IllegalStateException("asyncExecutor 必填（耗时 I/O 必须外置线程池）");
             }
             return new PackProcessor(this);
         }

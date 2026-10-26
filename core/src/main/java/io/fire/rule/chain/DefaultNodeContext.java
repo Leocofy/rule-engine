@@ -37,13 +37,13 @@ public class DefaultNodeContext implements INodeContext {
     private DefaultNodeContext(Builder b) {
         this.executor = b.executor;
         this.chain = b.chain;
+        this.nodeId = b.nodeId;
         this.expressionEngine = b.expressionEngine;
         this.asyncExecutor = b.asyncExecutor;
         this.sink = b.sink;
         this.capabilities = b.capabilities != null ? b.capabilities : new HashMap<>();
-        this.callback = b.callback;
+        this.callback = b.execCtx.getCallback();
         this.execCtx = b.execCtx;
-        this.nodeId = execCtx != null ? execCtx.getNodeId() : b.nodeId;
     }
 
     @Override
@@ -83,7 +83,7 @@ public class DefaultNodeContext implements INodeContext {
             }
             for (String target : targets) {
                 anyRouted = true;
-                executor.dispatch(chain, target, msg, execCtx, callback);
+                executor.dispatch(chain, target, msg, execCtx);
             }
         }
 
@@ -105,7 +105,7 @@ public class DefaultNodeContext implements INodeContext {
             return;
         }
         for (String target : targets) {
-            executor.dispatch(chain, target, msg, execCtx, callback);
+            executor.dispatch(chain, target, msg, execCtx);
         }
     }
 
@@ -146,10 +146,8 @@ public class DefaultNodeContext implements INodeContext {
             return;
         }
         ExecutionContext childCtx = execCtx.copy();
-        childCtx.setChainId(chainId);
-        childCtx.setNodeId(null);
         childCtx.pushToStack(chain.getId(), nodeId);   // 压栈：记住从哪来
-        executor.execute(msg, childCtx, callback);
+        executor.execute(msg, chainId, childCtx);
     }
 
     @Override
@@ -169,7 +167,7 @@ public class DefaultNodeContext implements INodeContext {
             complete(msg);                          // 已回到顶层链，确认完成
             return;
         }
-        RuleChain callerChain = executor.chain(caller[0]);
+        RuleChain callerChain = executor.getChain(caller[0]);
         if (callerChain == null) {
             complete(msg);
             return;
@@ -180,7 +178,7 @@ public class DefaultNodeContext implements INodeContext {
             return;
         }
         for (String target : targets) {
-            executor.dispatch(callerChain, target, msg, execCtx, callback);
+            executor.dispatch(callerChain, target, msg, execCtx);
         }
     }
 
@@ -222,6 +220,11 @@ public class DefaultNodeContext implements INodeContext {
         return callback != null && callback.isValid();
     }
 
+    @Override
+    public String getNodeId() {
+        return nodeId;
+    }
+
     public static Builder builder() {
         return new Builder();
     }
@@ -234,7 +237,6 @@ public class DefaultNodeContext implements INodeContext {
         protected Executor asyncExecutor;
         protected IMessageSink sink;
         protected Map<Class<?>, Object> capabilities;
-        protected ExecutionCallback callback;
         protected ExecutionContext execCtx;
 
         public Builder executor(ChainExecutor executor) {
@@ -274,11 +276,6 @@ public class DefaultNodeContext implements INodeContext {
 
         public Builder capabilities(Map<Class<?>, Object> capabilities) {
             this.capabilities = capabilities;
-            return this;
-        }
-
-        public Builder callback(ExecutionCallback callback) {
-            this.callback = callback;
             return this;
         }
 

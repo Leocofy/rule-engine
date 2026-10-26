@@ -1,3 +1,7 @@
+server:
+  port: 18080
+
+
 rule:
   engine:
     enabled: true

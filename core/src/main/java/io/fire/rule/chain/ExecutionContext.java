@@ -10,8 +10,6 @@ import io.fire.rule.model.ProcessingStack;
  */
 public final class ExecutionContext {
 
-    private String chainId;
-    private String nodeId;
     private final ProcessingStack stack;
     private ExecutionCallback callback;
 
@@ -20,31 +18,18 @@ public final class ExecutionContext {
         this.callback = ExecutionCallback.NOOP;
     }
 
-    public ExecutionContext(String chainId, String nodeId, ProcessingStack stack, ExecutionCallback callback) {
-        this.chainId = chainId;
-        this.nodeId = nodeId;
+    public ExecutionContext(ExecutionCallback callback) {
+        this.stack = new ProcessingStack();
+        this.callback = callback != null ? callback : ExecutionCallback.NOOP;
+    }
+
+    public ExecutionContext(ProcessingStack stack, ExecutionCallback callback) {
         this.stack = stack != null ? stack : new ProcessingStack();
         this.callback = callback != null ? callback : ExecutionCallback.NOOP;
     }
 
     public ExecutionContext copy() {
-        return new ExecutionContext(chainId, nodeId, stack.copy(), callback);
-    }
-
-    public String getChainId() {
-        return chainId;
-    }
-
-    public void setChainId(String chainId) {
-        this.chainId = chainId;
-    }
-
-    public String getNodeId() {
-        return nodeId;
-    }
-
-    public void setNodeId(String nodeId) {
-        this.nodeId = nodeId;
+        return new ExecutionContext(stack.copy(), callback);
     }
 
     public ProcessingStack getStack() {

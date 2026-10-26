@@ -6,6 +6,7 @@ import io.fire.rule.cluster.DistributedIMessageSink;
 import io.fire.rule.cluster.JsonMessageSerializer;
 import io.fire.rule.cluster.MessageSerializer;
 import io.fire.rule.cluster.PartitionRouter;
+import io.fire.rule.config.IChainLoader;
 import io.fire.rule.config.JsonChainLoader;
 import io.fire.rule.model.RuleMessage;
 import io.fire.rule.observability.EngineObserver;
@@ -15,6 +16,8 @@ import io.fire.rule.runtime.dispatcher.TaskDispatcher;
 import io.fire.rule.runtime.strategy.BurstSubmitStrategy;
 import io.fire.rule.runtime.strategy.SubmitStrategy;
 import io.fire.rule.spi.*;
+import io.fire.rule.store.IChainStore;
+import io.fire.rule.store.InMemoryChainStore;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -52,28 +55,25 @@ public class RuleEngine {
     private final INodeRegistry registry;
     private final ChainExecutor chainExecutor;
     private final PackProcessor processor;
-    private final TaskDispatcher dispatcher;
     private final ExecutorService asyncPool;
     private final ExecutorService consumerExecutor;
-    private final JsonChainLoader loader;
     private final EngineObserver observer;
 
     private RuleEngine(Builder b) {
         this.registry = b.registry;
-        this.loader = new JsonChainLoader(registry);
         this.observer = b.observer != null ? b.observer : EngineObserver.NOOP;
         this.asyncPool = b.asyncPool;
-        this.dispatcher = b.dispatcher;
 
         if (b.defaultChainId == null) {
             throw new TaskExecuteException(RuleEngine.class, "defaultChainId 未设置");
         }
 
+        IChainLoader loader = b.loader != null ? b.loader : new JsonChainLoader(b.registry);
         this.chainExecutor = ChainExecutor.builder()
                 .expressionEngine(b.expressionEngine)
                 .asyncExecutor(asyncPool)
+                .chainStore(b.chainStore != null ? b.chainStore : new InMemoryChainStore(loader))
                 .sink(b.sink)
-                .defaultChainId(b.defaultChainId)
                 .observer(observer)
                 .capabilities(b.capabilities == null ? null : b.capabilities.map)
                 .build();
@@ -83,8 +83,7 @@ public class RuleEngine {
                 .chainExecutor(chainExecutor)
                 .submitStrategy(b.submitStrategy)
                 .retryStrategy(b.retryStrategy)
-                .dispatcher(dispatcher)
-                .asyncExecutor(asyncPool)
+                .dispatcher(b.dispatcher)
                 .observer(observer)
                 .pollSize(b.pollSize)
                 .pollIntervalMs(b.pollIntervalMs)
@@ -111,16 +110,7 @@ public class RuleEngine {
      * 从 JSON 加载规则链。
      */
     public RuleChain loadChain(String json) throws NodeException {
-        RuleChain chain = loader.load(json);
-        chainExecutor.register(chain);
-        return chain;
-    }
-
-    /**
-     * 注册内存态构建的规则链（便于单元测试）。
-     */
-    public void registerChain(RuleChain chain) {
-        chainExecutor.register(chain);
+       return chainExecutor.register(json);
     }
 
     /**
@@ -131,10 +121,9 @@ public class RuleEngine {
     }
 
     public void stop() {
-        processor.stop();
+        processor.stopAndAwait(10000L);
         consumerExecutor.shutdown();
         chainExecutor.shutdown();
-        dispatcher.close();
         asyncPool.shutdown();
     }
 
@@ -166,6 +155,8 @@ public class RuleEngine {
         private IExpressionEngine expressionEngine;
         private MessageSource source;
         private IMessageSink sink;
+        private IChainLoader loader;
+        private IChainStore chainStore;
         private EngineObserver observer = EngineObserver.NOOP;
         private SubmitStrategy submitStrategy = new BurstSubmitStrategy();
         private RetryStrategy retryStrategy = RetryStrategy.retryFailed();
@@ -212,6 +203,16 @@ public class RuleEngine {
 
         public Builder observer(EngineObserver observer) {
             this.observer = observer;
+            return this;
+        }
+
+        public Builder loader(IChainLoader loader) {
+            this.loader = loader;
+            return this;
+        }
+
+        public Builder chainStore(IChainStore store) {
+            this.chainStore = store;
             return this;
         }
 
