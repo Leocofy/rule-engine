@@ -1,7 +1,6 @@
 server:
   port: 18080
 
-
 rule:
   engine:
     enabled: true
@@ -11,10 +10,9 @@ rule:
     pack-timeout-ms: 10000
     auto-start: true
     expression-engine: aviator
-
-example:
-  enabled: false
+  designer:
+    # 设计器保存的规则链落盘目录（相对工作目录），重启后自动恢复
 
 logging:
   level:
-    io.fire: warn
+    io.fire.rule: info

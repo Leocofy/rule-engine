@@ -1,50 +1,176 @@
 {
   "id": "fireAlarm",
   "name": "消防隐患智能处置链",
-  "nodes": {
-    "recv": {
-      "type": "log",
-      "props": { "prefix": "[INPUT]" }
-    },
-    "validate": {
-      "type": "deviceValidate"
-    },
-    "riskFilter": {
-      "type": "filter",
-      "props": {
-        "expr": "telemetry.temperature > threshold.temperature || telemetry.smokeDensity > threshold.smokeDensity || telemetry.coLevel > threshold.coLevel"
+  "nodes": [
+    {
+      "id": "start",
+      "type": "start",
+      "meta": { "position": { "x": 0, "y": 200 } },
+      "data": {
+        "title": "开始",
+        "inputs": {
+          "type": "object",
+          "properties": {
+            "device": { "type": "object" },
+            "telemetry": { "type": "object" },
+            "threshold": { "type": "object" }
+          }
+        }
       }
     },
-    "enrich": {
+    {
+      "id": "recv",
+      "type": "log",
+      "meta": { "position": { "x": 200, "y": 200 } },
+      "data": {
+        "title": "入口日志",
+        "inputsValues": {
+          "prefix": { "type": "constant", "content": "[INPUT]" },
+          "level": { "type": "constant", "content": "INFO" }
+        }
+      }
+    },
+    {
+      "id": "validate",
+      "type": "deviceValidate",
+      "meta": { "position": { "x": 400, "y": 200 } },
+      "data": { "title": "遥测校验" }
+    },
+    {
+      "id": "riskFilter",
+      "type": "condition",
+      "meta": { "position": { "x": 600, "y": 200 } },
+      "data": {
+        "title": "风险阈值判定",
+        "conditions": [
+          {
+            "key": "True",
+            "value": {
+              "left": { "type": "ref", "content": ["start", "telemetry", "temperature"] },
+              "operator": "gt",
+              "right": { "type": "ref", "content": ["start", "threshold", "temperature"] }
+            }
+          },
+          {
+            "key": "True",
+            "value": {
+              "left": { "type": "ref", "content": ["start", "telemetry", "smokeDensity"] },
+              "operator": "gt",
+              "right": { "type": "ref", "content": ["start", "threshold", "smokeDensity"] }
+            }
+          },
+          {
+            "key": "True",
+            "value": {
+              "left": { "type": "ref", "content": ["start", "telemetry", "coLevel"] },
+              "operator": "gt",
+              "right": { "type": "ref", "content": ["start", "threshold", "coLevel"] }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "enrich",
       "type": "riskEnrich",
-      "props": { "criticalScore": "80", "warnScore": "50" }
+      "meta": { "position": { "x": 820, "y": 120 } },
+      "data": {
+        "title": "风险评估",
+        "inputsValues": {
+          "criticalScore": { "type": "constant", "content": "80" },
+          "warnScore": { "type": "constant", "content": "50" }
+        }
+      }
     },
-    "aiJudge": {
+    {
+      "id": "aiJudge",
       "type": "aiDecision",
-      "props": { "agent": "riskJudge", "latencyMs": "200" }
+      "meta": { "position": { "x": 1020, "y": 120 } },
+      "data": {
+        "title": "AI 处置判定",
+        "inputsValues": {
+          "agent": { "type": "constant", "content": "riskJudge" },
+          "latencyMs": { "type": "constant", "content": "200" }
+        }
+      }
     },
-    "notify": {
-      "type": "notify"
+    {
+      "id": "notify",
+      "type": "notify",
+      "meta": { "position": { "x": 1220, "y": 60 } },
+      "data": { "title": "告警通知" }
     },
-    "persist": {
+    {
+      "id": "fanout",
+      "type": "loop",
+      "meta": { "position": { "x": 1400, "y": 60 } },
+      "data": {
+        "title": "按渠道分发",
+        "loopFor": { "type": "ref", "content": ["alert", "channels"] },
+        "loopOutputs": {
+          "lastChannel": { "type": "ref", "content": ["_locals", "item"] }
+        }
+      },
+      "blocks": [
+        {
+          "id": "channelLog",
+          "type": "log",
+          "meta": { "position": { "x": 0, "y": 0 } },
+          "data": {
+            "title": "渠道下发",
+            "inputsValues": {
+              "prefix": { "type": "template", "content": "[CHANNEL] {{_locals.item}} @{{_locals.index}}" },
+              "level": { "type": "constant", "content": "INFO" }
+            }
+          }
+        }
+      ],
+      "edges": []
+    },
+    {
+      "id": "persist",
       "type": "asyncSink",
-      "props": { "target": "tdengine" }
+      "meta": { "position": { "x": 1600, "y": 120 } },
+      "data": {
+        "title": "落库",
+        "inputsValues": {
+          "target": { "type": "constant", "content": "tdengine" }
+        }
+      }
     },
-    "archive": {
-      "type": "archive"
+    {
+      "id": "archive",
+      "type": "archive",
+      "meta": { "position": { "x": 820, "y": 320 } },
+      "data": { "title": "归档" }
+    },
+    {
+      "id": "end",
+      "type": "end",
+      "meta": { "position": { "x": 1800, "y": 200 } },
+      "data": {
+        "title": "结束",
+        "inputsValues": {
+          "decision": { "type": "ref", "content": ["risk", "level"] },
+          "riskScore": { "type": "ref", "content": ["risk", "score"] }
+        }
+      }
     }
-  },
-  "edges": {
-    "recv":       [ { "to": "validate" } ],
-    "validate":   [ { "to": "riskFilter", "relation": "Valid" },
-                    { "to": "archive", "relation": "Invalid" } ],
-    "riskFilter": [ { "to": "enrich", "relation": "True" },
-                    { "to": "archive", "relation": "False" } ],
-    "enrich":     [ { "to": "aiJudge" } ],
-    "aiJudge":    [ { "to": "notify", "relation": "立即处置" },
-                    { "to": "persist", "relation": "持续观察" },
-                    { "to": "archive", "relation": "无需处置" } ],
-    "notify":     [ { "to": "persist" } ]
-  },
-  "entry": [ "recv" ]
+  ],
+  "edges": [
+    { "sourceNodeID": "start", "targetNodeID": "recv" },
+    { "sourceNodeID": "recv", "targetNodeID": "validate" },
+    { "sourceNodeID": "validate", "targetNodeID": "riskFilter", "sourcePortID": "Valid" },
+    { "sourceNodeID": "validate", "targetNodeID": "archive", "sourcePortID": "Invalid" },
+    { "sourceNodeID": "riskFilter", "targetNodeID": "enrich", "sourcePortID": "True" },
+    { "sourceNodeID": "riskFilter", "targetNodeID": "archive", "sourcePortID": "else" },
+    { "sourceNodeID": "enrich", "targetNodeID": "aiJudge" },
+    { "sourceNodeID": "aiJudge", "targetNodeID": "notify", "sourcePortID": "立即处置" },
+    { "sourceNodeID": "aiJudge", "targetNodeID": "persist", "sourcePortID": "持续观察" },
+    { "sourceNodeID": "aiJudge", "targetNodeID": "archive", "sourcePortID": "无需处置" },
+    { "sourceNodeID": "notify", "targetNodeID": "fanout" },
+    { "sourceNodeID": "fanout", "targetNodeID": "persist" },
+    { "sourceNodeID": "persist", "targetNodeID": "end" },
+    { "sourceNodeID": "archive", "targetNodeID": "end" }
+  ]
 }

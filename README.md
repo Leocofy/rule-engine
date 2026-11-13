@@ -43,7 +43,7 @@ flowchart LR
 2. `SubmitStrategy.init` 建立批次内队列（如按 originator 分组）
 3. `PackContext` 建账本，逐条投递并登记 `pending`
 4. `TaskDispatcher` 按 originator 哈希到 lane，同键串行、异键并行
-5. `ChainExecutor` 从入口节点执行 DAG，节点用 `tellNext/tellSuccess/tellFailure` 路由
+5. `ChainExecutor` 从入口节点执行 DAG，节点用 `emit(out)` 暂存产出、`next(port)/fail(t)` 路由
 6. `await(packTimeoutMs)`：全部成功则 `commit`；失败/超时交 `RetryStrategy` 判决，重投子集或写死信后 `commit`
 
 ### 2.3 核心组件
@@ -56,14 +56,14 @@ flowchart LR
 | `SubmitStrategy` | 批次投递方式：`Burst` 全量并发、`SequentialByKey` 按实体串行 |
 | `PackContext` | 批次账本：`pending/success/failed`、`CountDownLatch`、fan-out 计数 |
 | `TaskDispatcher` | 按 key 路由到固定 lane，保证同键串行 |
-| `ChainExecutor` | DAG 路由，负责 `dispatch`、`resume`、嵌套链、`tellSelf` |
-| `RuleNode` | 业务扩展点，`init` 解析配置，`onMsg` 处理消息 |
+| `ChainExecutor` | DAG 路由，负责 `dispatch`、`resume`、嵌套链、`retrySelf` |
+| `RuleNode` | 业务扩展点，单参 `onMsg(ctx)` 处理消息，经 `ctx.state()` 读、`emit/next` 写与投递 |
 
 ### 2.4 并发与顺序
 
 - **单消费线程**：`rule-consumer` 负责 poll → 投递 → await → commit，批次严格串行。
 - **按 originator 分 lane**：`rule-lane-N` 单线程 + 有界队列，同键串行、异键并行；队列满时 `CallerRunsPolicy` 形成反压。
-- **异步节点**：耗时 I/O 交给 `ctx.asyncExecutor()`，结束时必须回调 `tellNext/tellFailure`，否则批次会挂到超时。
+- **异步节点**：耗时 I/O 交给 `ctx.asyncExecutor()`，结束时必须回调 `next/fail`，否则批次会挂到超时。
 - **fan-out**：分支派发前先 `onFanOut(totalTargets)`，避免先完成的分支让批次提前收口。
 
 ### 2.5 可靠性
@@ -84,7 +84,7 @@ flowchart LR
 ### 2.6 分布式与观测
 
 - 跨实例：`DistributedIMessageSink` 本地优先、远程序列化投递；`PartitionedMessageSource` 消费本实例分区；`ChainExecutor.resume` 从关系继续，不重复执行上游节点。
-- 观测：`EngineObserver` 统一上报节点耗时、批次、死信；`EngineObserver.Stats` 是默认实现，替换为自定义 Bean 即可接管。
+- 观测：`EngineObserver` 的节点级钩子（started/routed/finished）传**本跳 `NodeDelta`**（产出/端口/下游/耗时），不暴露整份状态；批次与死信事件另成一组。`EngineObserver.Stats` 是默认实现，替换为自定义 Bean 即可接管。
 
 ## 3. 快速开始
 
@@ -118,67 +118,86 @@ rule:
 
 ### 3.3 编写节点
 
+统一 State 模型（方案 A）下，节点入口收敛为**单参** `onMsg(ctx)`：读输入、写产出、投递下游都经
+`INodeContext`，不再显式搬运消息。`RuleNode` 是函数式接口，只有 `onMsg` 一个方法。
+
 ```java
 @NodeComponent(type = "filter", category = "filter",
+        name = "条件过滤",
         description = "按条件分流到 True / False",
         relations = {"True", "False"})
 public class FilterNode implements RuleNode {
 
-    private String expr;
-
     @Override
-    public void init(INodeContext ctx, NodeConfig config) throws NodeException {
-        this.expr = config.get("expr");
-        if (expr == null || expr.isEmpty()) {
-            throw new NodeException("filter 节点缺少 expr 配置", true);
-        }
-    }
+    public void onMsg(INodeContext ctx) throws Exception {
+        // 读：入口负载 / 命名空间产出 / 元数据都从不可变快照取
+        String expr = (String) ctx.nodeConfig().get("expr");
+        boolean pass = ctx.expressionEngine().evaluate(expr, ctx.state());
 
-    @Override
-    public void onMsg(INodeContext ctx, RuleMessage msg) throws Exception {
-        boolean pass = ctx.expressionEngine().evaluate(expr, msg);
-        ctx.tellNext(msg, pass ? "True" : "False");
+        // 写 + 投递：emit 暂存本节点产出（落到 outputs[nodeId]），next 按端口交给下游
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("pass", pass);
+        ctx.emit(out);
+        ctx.next(pass ? "True" : "False");
     }
 }
 ```
 
 约定：
 
-- `init` 只做配置解析与资源准备。加载器调用的是 `init(null, config)`，不能用 `ctx`。
-- `onMsg` 的每个分支都必须有出口（`tellNext/tellSuccess/tellFailure/ack`），否则消息会挂到超时。
-- 耗时 I/O 交给 `ctx.asyncExecutor()`，并在任务开始时检查 `msg.isValid()`。
-- 节点必须无状态，状态放 `metadata` 或外部存储。
+- **读**：`ctx.state()`（`entry/outputs/meta/scope`）、`ctx.resolvedInputs()`（按 `data.inputsValues` 解析 IFlowValue）、
+  `ctx.variable(scope, path)`、`ctx.getMetaData(key, type)`、Loop 内 `ctx.iterationItem()`。
+- **写**：`ctx.emit(output)` 暂存产出，投递时写入命名空间 `outputs[nodeId]` 供下游 `ref`；
+  改写型节点用逃生舱 `ctx.replaceEntry(map)`（替换入口负载）、`ctx.metaPut(k, v)`（累积写元数据）。
+- **投递**：`ctx.next()` / `ctx.next(port)` / `ctx.next(Set)`（fan-out）/ `ctx.fail(t)`（异常端口）/
+  `ctx.enqueueNext(port)`（跨实例落队列）/ `ctx.ack()`（终态收口）/ `ctx.retrySelf(ms)`（自投递）。
+- 每个分支都必须有出口（`next/fail/ack`），否则消息会挂到超时。
+- 耗时 I/O 交给 `ctx.asyncExecutor()`，并在任务开始时检查 `ctx.isValid()`。
+- 节点必须无状态（可单例复用），每次流转的数据都在随消息走的 `ExecutionState` 快照上。
 
 ### 3.4 编写规则链
+
+规则链是 FlowGram 的权威图格式 `{nodes[], edges[]}`（引擎内置 `start/end/condition/loop` 控制流节点 + 业务节点）：
 
 ```json
 {
   "id": "fireAlarm",
   "name": "消防隐患智能处置链",
-  "nodes": {
-    "recv":       { "type": "log", "props": { "prefix": "[INPUT]" } },
-    "validate":   { "type": "deviceValidate" },
-    "riskFilter": { "type": "filter",
-                    "props": { "expr": "telemetry.temperature > threshold.temperature" } },
-    "enrich":     { "type": "riskEnrich", "props": { "criticalScore": "80" } },
-    "archive":    { "type": "archive" }
-  },
-  "edges": {
-    "recv":       [ { "to": "validate" } ],
-    "validate":   [ { "to": "riskFilter", "relation": "Valid" },
-                    { "to": "archive", "relation": "Invalid" } ],
-    "riskFilter": [ { "to": "enrich", "relation": "True" },
-                    { "to": "archive", "relation": "False" } ]
-  },
-  "entry": [ "recv" ]
+  "nodes": [
+    { "id": "start", "type": "start", "data": {} },
+    { "id": "recv", "type": "log",
+      "data": { "inputsValues": { "prefix": { "type": "constant", "content": "[INPUT]" } } } },
+    { "id": "validate", "type": "deviceValidate", "data": {} },
+    { "id": "riskFilter", "type": "condition", "data": { "conditions": [
+        { "key": "True", "value": {
+            "left":     { "type": "ref", "content": ["start", "telemetry", "temperature"] },
+            "operator": "gt",
+            "right":    { "type": "ref", "content": ["start", "threshold", "temperature"] } } } ] } },
+    { "id": "enrich", "type": "riskEnrich", "data": {} },
+    { "id": "archive", "type": "archive", "data": {} },
+    { "id": "end", "type": "end", "data": { "inputsValues": {
+        "level": { "type": "ref", "content": ["enrich", "riskLevel"] } } } }
+  ],
+  "edges": [
+    { "sourceNodeID": "start",      "targetNodeID": "recv",       "sourcePortID": "default" },
+    { "sourceNodeID": "recv",       "targetNodeID": "validate",   "sourcePortID": "default" },
+    { "sourceNodeID": "validate",   "targetNodeID": "riskFilter", "sourcePortID": "Valid" },
+    { "sourceNodeID": "validate",   "targetNodeID": "archive",    "sourcePortID": "Invalid" },
+    { "sourceNodeID": "riskFilter", "targetNodeID": "enrich",     "sourcePortID": "True" },
+    { "sourceNodeID": "riskFilter", "targetNodeID": "archive",    "sourcePortID": "else" },
+    { "sourceNodeID": "enrich",     "targetNodeID": "end",        "sourcePortID": "default" },
+    { "sourceNodeID": "archive",    "targetNodeID": "end",        "sourcePortID": "default" }
+  ]
 }
 ```
 
-- `edges[].relation` 省略时默认 `Success`；没有下游接住的关系视为链路终点，自动 `ack`。
-- `entry` 省略时取第一个节点。
-- `customRelations = true` 的节点（如 AI 判定）关系名运行时确定，下游名必须与返回值一致。
+- 边的 `sourcePortID` 就是节点 `next(port)` 走的端口；串联用 `default`（`INodeContext.PORT_DEFAULT`）。
+- 取值用 `IFlowValue`：`constant` 字面量、`ref` 从命名空间 `outputs[scope]/entry[scope]` 按路径取、`expression`/`template` 交表达式引擎或插值。
+- `condition` 未命中任何 `conditions[].key` 走 `else`；`deviceValidate` 之类的分支节点按业务端口（`Valid`/`Invalid`）投递。
+- 必须有唯一 `start` 入口、至少一个 `end`（`end` 汇总 `inputsValues` 后 `ack` 收口）。
 
-示例模块的完整链路还包含 `aiJudge`、`notify`、`persist` 三个异步节点，见 `example/src/main/resources/fire-alarm-chain.json`。
+示例模块的完整链路还包含 `aiJudge`（AI 判定）、`notify`、`persist`（异步落库）、`fanout`（Loop 逐渠道分发）等节点，
+见 `example/src/main/resources/fire-alarm-chain.json`。
 
 ### 3.5 投递消息与注入能力
 
@@ -238,7 +257,9 @@ java -jar example/target/rule-engine-example-1.0.0.jar --server.port=18080
 
 打开 <http://localhost:18080/designer/> 即可拖拽编排。
 
-- 节点库来自 `GET /designer/nodes`（由 `INodeRegistry` 定义生成），接口不可用时回退内置目录。
+- 节点库来自 `GET /designer/nodes`，接口不可用时回退内置目录；响应为 `{ nodes, categories }`：
+  `nodes` 按 `@NodeComponent(order = 30)` 权重排序，`categories` 是分类的展示顺序（取组内最小 `order`），
+  左侧面板的分组与排列完全由后端决定，前端不再写死次序。
 - “加载示例”读取 `GET /designer/example`，返回引擎当前加载的规则链 JSON。
 - 节点右侧每个圆点是一个出口，圆点名称即 `relation`；`aiDecision` 等自定义关系节点先在右侧面板添加出口名。
 - 导出的 JSON 与 `JsonChainLoader` 格式一致，可直接放到 classpath 交给 `rule.engine.chain-config-path`。
@@ -275,10 +296,12 @@ npm run dev          # http://localhost:5173/designer/
 | 实时风控 | 用户 / 订单 / 卡号 | 同一主体行为序列保序；外部画像、名单、模型走异步池 |
 | 事件驱动集成 | 业务主键 | 规则链作为路由器，按类型分流到工单、短信、数仓 |
 | 边缘网关 | 设备 ID | core 无 Spring 依赖，可直接嵌入；有界队列形成反压 |
-| 异步审批流 | 流程 ID | `tellSelf` 延迟唤醒，`input/output` 嵌套子链；注意延迟任务不持久化 |
+| 异步审批流 | 流程 ID | `retrySelf` 延迟唤醒，`input/output` 嵌套子链；注意延迟任务不持久化 |
 | 规则可配置系统 | 业务主键 | JSON 持久化 + `@NodeComponent` 元数据驱动前端画布与表单 |
 
 ## 7. 扩展点
+
+> 接入第三方组件（设计器 / 编排台 / 运行时对接等）作为**可开关的自包含集成**，请遵循 [集成规范](docs/integration-guide.md)：一个集成一个包、独立 `@AutoConfiguration` + `enable` 开关、依赖单向、内核零改动。
 
 | 扩展点 | 接口 |
 | --- | --- |
@@ -300,4 +323,4 @@ npm run dev          # http://localhost:5173/designer/
 3. **节点无状态、分支有出口、I/O 走异步**：这三条是稳定运行的前提。
 4. **至少一次语义要求业务幂等**：用 `RuleMessage.id` 或业务唯一键去重。
 5. **热点实体必须单独压测**：用 `HOT_DEVICE=true` 验证单 lane 上限，再决定 lane 数与 originator 粒度。
-6. **已知限制**：`tellSelf` 不持久化，重启丢失；`InMemoryMessageSource` 不持久化；`KafkaMessageSource` 是骨架实现；Spring 节点为单例，多链复用同类型节点时 `props` 会互相覆盖。
+6. **已知限制**：`retrySelf` 不持久化，重启丢失；`InMemoryMessageSource` 不持久化；`KafkaMessageSource` 是骨架实现；Spring 节点为单例，多链复用同类型节点时 `props` 会互相覆盖。

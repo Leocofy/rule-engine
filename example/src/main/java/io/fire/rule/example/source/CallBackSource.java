@@ -1,7 +1,7 @@
 package io.fire.rule.example.source;
 
-import io.fire.rule.runtime.Envelope;
-import io.fire.rule.runtime.MessageSource;
+import io.fire.rule.core.runtime.Envelope;
+import io.fire.rule.core.runtime.MessageSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;

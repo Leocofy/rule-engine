@@ -1,9 +1,8 @@
 package io.fire.rule.example.service;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.fire.rule.example.node.AiDecisionNode;
-import io.fire.rule.model.RuleMessage;
+import io.fire.rule.core.model.ExecutionState;
+import io.fire.rule.spring.flowgram.execution.FlowGramExecutionService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -28,15 +27,13 @@ public class MockDecisionService implements AiDecisionNode.DecisionService {
 
     private static final Logger LOG = LoggerFactory.getLogger(MockDecisionService.class);
 
-    private final ObjectMapper objectMapper;
-
-    public MockDecisionService(ObjectMapper objectMapper) {
-        this.objectMapper = objectMapper;
+    public MockDecisionService(FlowGramExecutionService service) {
+        service.capability(AiDecisionNode.DecisionService.class, this);
     }
 
     @Override
-    public String decide(String agent, RuleMessage msg) {
-        Map<String, Object> root = readPayload(msg.getPayload());
+    public String decide(String agent, ExecutionState state) {
+        Map<String, Object> root = state.entry();
         Map<String, Object> risk = asMap(root.get("risk"));
         Map<String, Object> device = asMap(root.get("device"));
         Map<String, Object> telemetry = asMap(root.get("telemetry"));
@@ -44,7 +41,7 @@ public class MockDecisionService implements AiDecisionNode.DecisionService {
         double score = number(risk.get("score"), 0d);
         String level = asText(risk.get("level"), "LOW");
         List<?> factors = asList(risk.get("factors"));
-        String deviceId = asText(device.get("deviceId"), msg.getOriginator());
+        String deviceId = asText(device.get("deviceId"), asText(state.meta().get("deviceId"), "unknown"));
 
         String decision;
         if ("CRITICAL".equals(level) || score >= 80d) {
@@ -55,25 +52,10 @@ public class MockDecisionService implements AiDecisionNode.DecisionService {
             decision = "无需处置";
         }
 
-        msg.getMetaData().put("decision", decision);
-        msg.getMetaData().put("decisionAgent", agent);
         LOG.info("AI 判定 [agent={}] device={} temp={} smoke={} score={} level={} factors={} => {}",
                 agent, deviceId, telemetry.get("temperature"), telemetry.get("smokeDensity"),
                 String.format("%.2f", score), level, factors, decision);
         return decision;
-    }
-
-    private Map<String, Object> readPayload(String payload) {
-        if (payload == null || payload.trim().isEmpty()) {
-            return Collections.emptyMap();
-        }
-        try {
-            return objectMapper.readValue(payload, new TypeReference<Map<String, Object>>() {
-            });
-        } catch (Exception e) {
-            LOG.warn("payload 解析失败，按无风险处理: {}", payload);
-            return Collections.emptyMap();
-        }
     }
 
     @SuppressWarnings("unchecked")

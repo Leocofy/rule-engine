@@ -44,5 +44,9 @@ web/dist/
 web/.vite/
 web/.cache/
 
+### Rule Designer (saved chains) ###
+demo-free-layout/dist
+demo-free-layout/node_modules
+
 ### Mac OS ###
 .DS_Store

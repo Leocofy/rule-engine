@@ -1,2 +1,3 @@
 org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
-io.fire.rule.config.RuleEngineAutoConfiguration
+io.fire.rule.spring.config.RuleEngineAutoConfiguration,\
+io.fire.rule.spring.flowgram.FlowGramAutoConfiguration

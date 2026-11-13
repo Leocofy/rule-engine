@@ -35,6 +35,20 @@
             <artifactId>spring-context</artifactId>
         </dependency>
 
+        <!-- FlowGram 设计器 HTTP 服务（/flowgram/*）所需；标 optional，
+             非 Web 应用引入 starter 时不会被迫拉起 MVC 栈 -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-web</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-webmvc</artifactId>
+            <optional>true</optional>
+        </dependency>
+
         <dependency>
             <groupId>io.fire</groupId>
             <artifactId>rule-engine-core</artifactId>
@@ -47,9 +61,28 @@
             <version>3.0.1</version>
         </dependency>
 
+        <!-- 脚本节点：JDK11+ 无内置 Nashorn，引入独立 Nashorn 引擎 -->
+        <dependency>
+            <groupId>org.openjdk.nashorn</groupId>
+            <artifactId>nashorn-core</artifactId>
+            <version>15.4</version>
+        </dependency>
+
         <dependency>
             <groupId>org.xerial</groupId>
             <artifactId>sqlite-jdbc</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>com.fasterxml.jackson.module</groupId>
+            <artifactId>jackson-module-jsonSchema-jakarta</artifactId>
+        </dependency>
+
+        <!--   测试：State 流端到端回归（含 Loop 经真实 LoopNode 的等价性验证），版本由 spring-boot-parent 管理   -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
         </dependency>
 
     </dependencies>

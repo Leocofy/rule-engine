@@ -3,11 +3,10 @@ package io.fire.rule.example;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.fire.rule.RuleEngine;
+import io.fire.rule.core.RuleEngine;
 import io.fire.rule.example.source.CallBackSource;
-import io.fire.rule.model.MetaData;
-import io.fire.rule.model.RuleMessage;
-import io.fire.rule.runtime.Envelope;
+import io.fire.rule.core.model.RuleMessage;
+import io.fire.rule.core.runtime.Envelope;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -26,7 +25,7 @@ import java.util.UUID;
 /**
  * Example 启动类：演示如何使用 rule-engine-spring-boot-starter。
  *
- * <p>starter 的自动配置会自动装配 {@link io.fire.rule.RuleEngine}，
+ * <p>starter 的自动配置会自动装配 {@link RuleEngine}，
  * 业务侧只需提供节点服务 Bean 和规则链 JSON 即可。
  *
  * <p>HTTP 入口接收真实的嵌套设备报文（设备档案 / 多指标遥测 / 阈值 / 最近窗口），
@@ -93,15 +92,10 @@ public class ExampleApplication {
             type = "DEVICE_TELEMETRY";
         }
 
-        MetaData metadata = new MetaData();
-        metadata.put("traceId", traceId);
-        metadata.put("ingestSource", "HTTP_CALLBACK");
-
         callBackSource.add(new Envelope(RuleMessage.newMessage()
                 .type(type)
                 .originator(deviceId)
                 .payload(objectMapper.writeValueAsString(root))
-                .metaData(metadata)
                 .build()));
 
         Map<String, Object> accepted = new LinkedHashMap<>();

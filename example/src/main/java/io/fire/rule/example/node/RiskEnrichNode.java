@@ -1,12 +1,10 @@
 package io.fire.rule.example.node;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.fire.rule.config.NodeComponent;
-import io.fire.rule.model.RuleMessage;
-import io.fire.rule.spi.INodeContext;
-import io.fire.rule.spi.NodeException;
-import io.fire.rule.spi.RuleNode;
+import io.fire.rule.core.spi.NodeException;
+import io.fire.rule.example.config.NodeCategory;
+import io.fire.rule.spring.annotation.NodeComponent;
+import io.fire.rule.core.spi.INodeContext;
+import io.fire.rule.core.spi.RuleNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,7 +35,7 @@ import java.util.UUID;
  * @author Cai FeiYue
  * @date 2026/10/22
  */
-@NodeComponent(type = "riskEnrich", category = "analysis",
+@NodeComponent(type = "riskEnrich", category = NodeCategory.BUSINESS,
         description = "多因子风险评估：计算风险分、等级、因子与处置建议")
 public class RiskEnrichNode implements RuleNode {
 
@@ -46,25 +44,18 @@ public class RiskEnrichNode implements RuleNode {
     private static final DateTimeFormatter ISO_MILLIS =
             DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
 
-    private final ObjectMapper objectMapper;
-
-    public RiskEnrichNode(ObjectMapper objectMapper) {
-        this.objectMapper = objectMapper;
-    }
-
     @Override
-    public void onMsg(INodeContext ctx, RuleMessage msg) throws Exception {
-        double criticalScore = toDouble(ctx.nodeConfig().getString("criticalScore"), 80d);
-        double warnScore = toDouble(ctx.nodeConfig().getString("warnScore"), 50d);
+    public void onMsg(INodeContext ctx) throws Exception {
+        Map<String, Object> inputs = new LinkedHashMap<>();
+        double criticalScore = toDouble(asText(inputs.get("criticalScore"), null), 80d);
+        double warnScore = toDouble(asText(inputs.get("warnScore"), null), 50d);
 
-        Map<String, Object> root;
-        try {
-            root = objectMapper.readValue(msg.getPayload(), new TypeReference<Map<String, Object>>() {
-            });
-        } catch (Exception e) {
-            ctx.tellFailure(msg, new NodeException("riskEnrich 无法解析 payload", true));
+        Map<String, Object> entry = ctx.state().entry();
+        if (entry == null || entry.isEmpty()) {
+            ctx.fail(new NodeException("riskEnrich 无法解析 payload", true));
             return;
         }
+        Map<String, Object> root = new LinkedHashMap<>(entry);
 
         Map<String, Object> device = asMap(root.get("device"));
         Map<String, Object> telemetry = asMap(root.get("telemetry"));
@@ -112,7 +103,7 @@ public class RiskEnrichNode implements RuleNode {
             factors.add("各项指标均在阈值内");
         }
 
-        String deviceId = asText(device.get("deviceId"), msg.getOriginator());
+        String deviceId = asText(device.get("deviceId"), ctx.getMetaData("deviceId", String.class));
         String zone = asText(asMap(device.get("location")).get("zone"), "未知区域");
         String alertId = "alert-" + UUID.randomUUID().toString().replace("-", "").substring(0, 10);
 
@@ -135,15 +126,13 @@ public class RiskEnrichNode implements RuleNode {
         root.put("risk", risk);
         root.put("alert", alert);
 
-        msg.getMetaData().put("riskScore", String.format("%.2f", score));
-        msg.getMetaData().put("riskLevel", level);
-        msg.getMetaData().put("alertId", alertId);
-
         LOG.info("风险评估完成: device={} score={} level={} factors={}",
                 deviceId, String.format("%.2f", score), level, factors);
-        ctx.tellSuccess(msg.transform()
-                .payload(objectMapper.writeValueAsString(root))
-                .build());
+        ctx.metaPut("riskScore", String.format("%.2f", score));
+        ctx.metaPut("riskLevel", level);
+        ctx.metaPut("alertId", alertId);
+        ctx.replaceEntry(root);
+        ctx.next();
     }
 
     private Trend evaluateTrend(List<Object> window, double current) {

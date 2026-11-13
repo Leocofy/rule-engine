@@ -2,10 +2,9 @@ package io.fire.rule.example.source;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.fire.rule.example.support.TelemetrySimulator;
-import io.fire.rule.model.MetaData;
-import io.fire.rule.model.RuleMessage;
-import io.fire.rule.runtime.Envelope;
-import io.fire.rule.runtime.MessageSource;
+import io.fire.rule.core.model.RuleMessage;
+import io.fire.rule.core.runtime.Envelope;
+import io.fire.rule.core.runtime.MessageSource;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -57,18 +56,10 @@ public class PullSource implements MessageSource {
             String type = event == null || event.get("type") == null
                     ? "DEVICE_TELEMETRY" : event.get("type").toString();
 
-            MetaData metadata = new MetaData();
-            metadata.put("traceId", String.valueOf(sample.get("traceId")));
-            metadata.put("ingestSource", "PULL_SOURCE");
-            if (event != null) {
-                metadata.put("reportedAt", String.valueOf(event.get("reportedAt")));
-            }
-
             queue.add(new Envelope(RuleMessage.newMessage()
                     .type(type)
                     .originator(deviceId)
                     .payload(payload)
-                    .metaData(metadata)
                     .build()));
         } catch (Exception e) {
             // 模拟源不因单条数据生成失败而退出

@@ -1,9 +1,8 @@
 package io.fire.rule.example.service;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.fire.rule.example.node.AsyncSinkNode;
-import io.fire.rule.model.RuleMessage;
+import io.fire.rule.core.model.ExecutionState;
+import io.fire.rule.spring.flowgram.execution.FlowGramExecutionService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -31,21 +30,20 @@ public class MockSinkHandler implements AsyncSinkNode.SinkHandler {
     private static final Logger LOG = LoggerFactory.getLogger(MockSinkHandler.class);
     private static final int MAX_RECORDS = 200;
 
-    private final ObjectMapper objectMapper;
     private final Map<String, Deque<String>> records = new ConcurrentHashMap<>();
 
-    public MockSinkHandler(ObjectMapper objectMapper) {
-        this.objectMapper = objectMapper;
+    public MockSinkHandler(FlowGramExecutionService executionService) {
+        executionService.capability(AsyncSinkNode.SinkHandler.class, this);
     }
 
     @Override
-    public void handle(String target, RuleMessage msg) {
-        Map<String, Object> root = readPayload(msg.getPayload());
+    public void handle(String target, ExecutionState state) {
+        Map<String, Object> root = state.entry();
         Map<String, Object> device = asMap(root.get("device"));
         Map<String, Object> risk = asMap(root.get("risk"));
         Map<String, Object> alert = asMap(root.get("alert"));
 
-        String deviceId = asText(device.get("deviceId"), msg.getOriginator());
+        String deviceId = asText(device.get("deviceId"), asText(state.meta().get("deviceId"), "unknown"));
         String level = asText(risk.get("level"), "UNKNOWN");
         String score = risk.get("score") == null ? "-" : String.valueOf(risk.get("score"));
         String alertId = asText(alert.get("alertId"), "-");
@@ -55,7 +53,7 @@ public class MockSinkHandler implements AsyncSinkNode.SinkHandler {
         switch (target) {
             case "tdengine":
                 LOG.info("[TDengine] 写入时序库: device={} level={} score={} alertId={} decision={}",
-                        deviceId, level, score, alertId, msg.getMetaData().get("decision"));
+                        deviceId, level, score, alertId, state.meta().get("decision"));
                 break;
             case "notify":
                 LOG.info("[通知] 渠道={} device={} zone={} level={} alertId={} 建议动作={}",
@@ -64,7 +62,7 @@ public class MockSinkHandler implements AsyncSinkNode.SinkHandler {
                 break;
             case "archive":
                 LOG.info("[归档] device={} level={} score={} reason={}",
-                        deviceId, level, score, msg.getMetaData().get("invalidReason"));
+                        deviceId, level, score, state.meta().get("invalidReason"));
                 break;
             default:
                 LOG.info("[{}] 投递成功: device={} level={} alertId={}", target, deviceId, level, alertId);
@@ -88,18 +86,6 @@ public class MockSinkHandler implements AsyncSinkNode.SinkHandler {
         queue.addFirst(record);
         while (queue.size() > MAX_RECORDS) {
             queue.pollLast();
-        }
-    }
-
-    private Map<String, Object> readPayload(String payload) {
-        if (payload == null || !payload.trim().startsWith("{")) {
-            return Collections.emptyMap();
-        }
-        try {
-            return objectMapper.readValue(payload, new TypeReference<Map<String, Object>>() {
-            });
-        } catch (Exception e) {
-            return Collections.emptyMap();
         }
     }
 

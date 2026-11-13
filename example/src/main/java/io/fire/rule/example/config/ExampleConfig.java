@@ -4,7 +4,7 @@ import io.fire.rule.example.source.CallBackSource;
 import io.fire.rule.example.source.CompositeMessageSource;
 import io.fire.rule.example.source.PullSource;
 import io.fire.rule.example.support.TelemetrySimulator;
-import io.fire.rule.runtime.MessageSource;
+import io.fire.rule.core.runtime.MessageSource;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;

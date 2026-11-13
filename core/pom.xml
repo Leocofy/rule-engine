@@ -21,7 +21,6 @@
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
 
-        <jackson.version>2.17.0</jackson.version>
         <slf4j.version>1.7.36</slf4j.version>
         <logback.version>1.2.11</logback.version>
     </properties>
@@ -30,7 +29,12 @@
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
-            <version>${jackson.version}</version>
+        </dependency>
+
+        <!--   YAML 规则链解析：与 databind 同版本，底层用 snakeyaml   -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.dataformat</groupId>
+            <artifactId>jackson-dataformat-yaml</artifactId>
         </dependency>
 
         <!--   日志   -->
@@ -44,6 +48,13 @@
             <artifactId>logback-classic</artifactId>
             <version>${logback.version}</version>
             <scope>runtime</scope>
+        </dependency>
+
+        <!--   测试：统一 State 模型重构的回归安全网（Step 0/1），版本由 spring-boot-parent 管理   -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
         </dependency>
 
     </dependencies>
@@ -74,12 +85,6 @@
                     <target>1.8</target>
                     <encoding>UTF-8</encoding>
                 </configuration>
-                <executions>
-                    <execution>
-                        <id>default-testCompile</id>
-                        <phase>none</phase>
-                    </execution>
-                </executions>
             </plugin>
         </plugins>
     </build>
